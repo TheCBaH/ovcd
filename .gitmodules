@@ -1,0 +1,15 @@
+[submodule "test-data/vcdvcd"]
+	path = test-data/vcdvcd
+	url = https://github.com/cirosantilli/vcdvcd.git
+[submodule "test-data/vcd-io"]
+	path = test-data/vcd-io
+	url = https://github.com/erihsu/vcd-io.git
+[submodule "test-data/pyDigitalWaveTools"]
+	path = test-data/pyDigitalWaveTools
+	url = https://github.com/Nic30/pyDigitalWaveTools.git
+[submodule "test-data/go-vcd-parser"]
+	path = test-data/go-vcd-parser
+	url = https://github.com/filmil/go-vcd-parser.git
+[submodule "test-data/digital-vcd-parser"]
+	path = test-data/digital-vcd-parser
+	url = https://github.com/Digital-EDA/digital-vcd-parser.git

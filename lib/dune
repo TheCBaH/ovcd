@@ -1,0 +1,14 @@
+(library
+ (name vcd)
+ (wrapped false)
+ (modules vcd_ast vcd_lexer vcd_parser vcd)
+ (libraries vcd_types)
+ (ocamlopt_flags
+  (:standard -O3)))
+
+(ocamllex
+ (modules vcd_lexer))
+
+(menhir
+ (modules vcd_parser)
+ (flags --explain))

@@ -1,0 +1,19 @@
+(library
+ (name vcd_filter)
+ (wrapped false)
+ (modules
+  filter_ast
+  filter_lexer
+  filter_grammar
+  filter_parser
+  filter_matcher)
+ (libraries vcd_types))
+
+(ocamllex
+ (modules filter_lexer))
+
+; filter_grammar is an internal Menhir module; filter_parser is the public facade
+
+(menhir
+ (modules filter_grammar)
+ (flags --explain))
