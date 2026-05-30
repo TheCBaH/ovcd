@@ -1,0 +1,45 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v6
+      with:
+        submodules: true
+
+    - name: devcontainer
+      uses: ./.github/workflows/actions/devcontainer
+      id: devcontainer
+
+    - name: setup
+      run: echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
+
+    - name: build
+      run: ${{ env.EXEC }} make
+
+    - name: test
+      run: ${{ env.EXEC }} make test
+
+    - name: benchmark
+      run: ${{ env.EXEC }} make benchmark BENCH_RUNS=1
+
+    - name: format
+      run: |
+        ${{ env.EXEC }} make format
+        git diff --exit-code
+
+    - name: check clean working tree
+      run: |
+        untracked=$(git status --porcelain | grep '^??' || true)
+        if [ -n "$untracked" ]; then
+          echo "Untracked files not covered by .gitignore:"
+          echo "$untracked"
+          exit 1
+        fi

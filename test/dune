@@ -1,0 +1,54 @@
+(library
+ (name vcd_tests)
+ (wrapped false)
+ (modules test_lexer test_parser test_parse filter_parse filter_match)
+ (libraries vcd vcd_filter)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect ppx_inline_test)))
+
+(rule
+ (target vcd_dump)
+ (action
+  (copy %{exe:../bin/vcd_dump.exe} %{target})))
+
+(cram
+ (applies_to icarus synopsys ieee misc resolve)
+ (deps
+  vcd_dump
+  ; vcdvcd
+  ../test-data/vcdvcd/counter_tb.vcd
+  ../test-data/vcdvcd/negator_tb.vcd
+  ; pyDigitalWaveTools
+  ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  ../test-data/pyDigitalWaveTools/tests/multiscope.vcd
+  ../test-data/pyDigitalWaveTools/tests/verilog2005-sample0.vcd
+  ../test-data/pyDigitalWaveTools/tests/verilog2005-sample1.vcd
+  ../test-data/pyDigitalWaveTools/tests/AxiRegTC_test_write.vcd
+  ; go-vcd-parser
+  ../test-data/go-vcd-parser/vcd/files/samples/18.2.4_01.vcd
+  ../test-data/go-vcd-parser/vcd/files/samples/18.2.4_02.vcd
+  ../test-data/go-vcd-parser/vcd/files/samples/first.vcd
+  ../test-data/go-vcd-parser/vcd/files/samples/tb.vcd
+  ; vcd-io
+  ../test-data/vcd-io/testcases/CLA.vcd
+  ../test-data/vcd-io/testcases/IEEE_std_example.vcd
+  ../test-data/vcd-io/testcases/example1.vcd
+  ../test-data/vcd-io/testcases/example2.vcd
+  ../test-data/vcd-io/testcases/example2a.vcd
+  ../test-data/vcd-io/testcases/example3.vcd
+  ../test-data/vcd-io/testcases/handy.vcd
+  ../test-data/vcd-io/testcases/handy2.vcd
+  ../test-data/vcd-io/testcases/handy3.vcd
+  ../test-data/vcd-io/testcases/wire_types.vcd
+  ; digital-vcd-parser
+  ../test-data/digital-vcd-parser/test/SIMv0.1/Tb_Sync_FIFO.vcd
+  ../test-data/digital-vcd-parser/test/SIMv0.2/Tb_Sync_FIFO.vcd
+  ../test-data/digital-vcd-parser/test/debug/base.vcd
+  ../test-data/digital-vcd-parser/test/debug/la0_waveform.vcd
+  ../test-data/digital-vcd-parser/test/debug/pe_tb.vcd
+  ../test-data/digital-vcd-parser/test/debug/small.vcd
+  ../test-data/digital-vcd-parser/test/debug/verilater.vcd
+  ../test-data/digital-vcd-parser/test/dump.vcd
+  ../test-data/digital-vcd-parser/test/samples/iverilog.large.vcd
+  ../test-data/digital-vcd-parser/test/samples/iverilog.small.vcd))

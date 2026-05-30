@@ -1,0 +1,5 @@
+(executable
+ (name vcd_dump)
+ (public_name vcd_dump)
+ (package vcd)
+ (libraries vcd vcd_filter re))
