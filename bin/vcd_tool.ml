@@ -9,11 +9,12 @@ let pp_changes resolver strip_map id_set ev =
       | Some entry ->
           let show = match id_set with None -> true | Some s -> ID_set.mem id s in
           if show then begin
-            let r = Vcd.Resolver.entry_reference entry in
-            let display = match strip_map with None -> r | Some f -> f r in
-            let name = Vcd_types.Reference.to_string display in
             let size = Vcd.Resolver.entry_size entry in
-            Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)
+            Vcd.Resolver.Ref_set.iter
+              (fun r ->
+                let display = match strip_map with None -> r | Some f -> f r in
+                Format.printf "  %s=%s\n" (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))
+              (Vcd.Resolver.entry_references entry)
           end)
     ev.Stateful.changes
 

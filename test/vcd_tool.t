@@ -109,12 +109,17 @@ changed at t=1 (while the stream was outside the range):
   $ ./vcd_tool --range 2-3 ../test-data/vcdvcd/counter_tb.vcd
   #2
     counter_tb.out=h0
+    counter_tb.clock=1
     counter_tb.top.clock=1
+    counter_tb.enable=0
     counter_tb.top.enable=0
+    counter_tb.reset=1
     counter_tb.top.reset=1
     counter_tb.top.out=h0
   #3
+    counter_tb.clock=0
     counter_tb.top.clock=0
+    counter_tb.reset=0
     counter_tb.top.reset=0
 
 Multiple --range flags (union) — t=0..1 and t=3..5; snapshot emitted at
@@ -123,23 +128,34 @@ each range entry:
   $ ./vcd_tool --range 0-1 --range 3-5 ../test-data/vcdvcd/counter_tb.vcd
   #0
     counter_tb.out=bx
+    counter_tb.clock=1
     counter_tb.top.clock=1
+    counter_tb.enable=0
     counter_tb.top.enable=0
+    counter_tb.reset=0
     counter_tb.top.reset=0
     counter_tb.top.out=bx
   #1
+    counter_tb.clock=0
     counter_tb.top.clock=0
+    counter_tb.reset=1
     counter_tb.top.reset=1
   #3
     counter_tb.out=h0
+    counter_tb.clock=0
     counter_tb.top.clock=0
+    counter_tb.enable=0
     counter_tb.top.enable=0
+    counter_tb.reset=0
     counter_tb.top.reset=0
     counter_tb.top.out=h0
   #4
+    counter_tb.clock=1
     counter_tb.top.clock=1
   #5
+    counter_tb.clock=0
     counter_tb.top.clock=0
+    counter_tb.enable=1
     counter_tb.top.enable=1
 
 --range with --signal — filter signals and time simultaneously:

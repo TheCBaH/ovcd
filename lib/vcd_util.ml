@@ -7,20 +7,21 @@ let build_filter resolver patterns regexes =
     let id_set =
       Vcd.Resolver.fold
         (fun entry acc ->
-          let ref_ = Vcd.Resolver.entry_reference entry in
+          let refs = Vcd.Resolver.entry_references entry in
+          let any_ref f = Vcd.Resolver.Ref_set.exists f refs in
           if
-            List.exists (fun (_, pat) -> Filter_matcher.matches pat ref_) patterns
+            List.exists (fun (_, pat) -> any_ref (Filter_matcher.matches pat)) patterns
             ||
             match regexes with
             | [] -> false
-            | _ ->
-                let name = Vcd_types.Reference.to_string ref_ in
-                List.exists (fun (_, re) -> Re.execp re name) regexes
+            | _ -> List.exists (fun (_, re) -> any_ref (fun r -> Re.execp re (Vcd_types.Reference.to_string r))) regexes
           then ID_set.add (Vcd.Resolver.entry_id entry) acc
           else acc)
         resolver ID_set.empty
     in
-    let any_ref_matches f = Vcd.Resolver.fold (fun e b -> b || f (Vcd.Resolver.entry_reference e)) resolver false in
+    let any_ref_matches f =
+      Vcd.Resolver.fold (fun e b -> b || Vcd.Resolver.Ref_set.exists f (Vcd.Resolver.entry_references e)) resolver false
+    in
     List.iter
       (fun (s, pat) ->
         if not (any_ref_matches (Filter_matcher.matches pat)) then
@@ -37,12 +38,15 @@ let build_filter resolver patterns regexes =
 let build_strip_map resolver filter =
   let matched =
     match filter with
-    | None -> Vcd.Resolver.fold (fun entry acc -> Vcd.Resolver.entry_reference entry :: acc) resolver []
+    | None ->
+        Vcd.Resolver.fold
+          (fun entry acc -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) (Vcd.Resolver.entry_references entry) acc)
+          resolver []
     | Some ids ->
         ID_set.fold
           (fun id acc ->
             match Vcd.Resolver.find resolver id with
-            | Some entry -> Vcd.Resolver.entry_reference entry :: acc
+            | Some entry -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) (Vcd.Resolver.entry_references entry) acc
             | None -> acc)
           ids []
   in

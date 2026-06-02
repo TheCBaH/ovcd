@@ -38,88 +38,121 @@ Nested scope — counter_tb.vcd (vcdvcd), IDs shared across parent and child sco
   $dumpvars
     counter_tb.top.out=bx
     counter_tb.top.reset=0
+    counter_tb.reset=0
     counter_tb.top.enable=0
+    counter_tb.enable=0
     counter_tb.top.clock=1
+    counter_tb.clock=1
     counter_tb.out=bx
   $end
   #1
     counter_tb.top.clock=0
+    counter_tb.clock=0
     counter_tb.top.reset=1
+    counter_tb.reset=1
   #2
     counter_tb.out=h0
     counter_tb.top.out=h0
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #3
     counter_tb.top.clock=0
+    counter_tb.clock=0
     counter_tb.top.reset=0
+    counter_tb.reset=0
   #4
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #5
     counter_tb.top.clock=0
+    counter_tb.clock=0
     counter_tb.top.enable=1
+    counter_tb.enable=1
   #6
     counter_tb.out=h1
     counter_tb.top.out=h1
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #7
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #8
     counter_tb.out=h2
     counter_tb.top.out=h2
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #9
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #10
     counter_tb.out=h3
     counter_tb.top.out=h3
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #11
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #12
     counter_tb.out=h0
     counter_tb.top.out=h0
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #13
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #14
     counter_tb.out=h1
     counter_tb.top.out=h1
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #15
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #16
     counter_tb.out=h2
     counter_tb.top.out=h2
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #17
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #18
     counter_tb.out=h3
     counter_tb.top.out=h3
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #19
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #20
     counter_tb.out=h0
     counter_tb.top.out=h0
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #21
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #22
     counter_tb.out=h1
     counter_tb.top.out=h1
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #23
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #24
     counter_tb.out=h2
     counter_tb.top.out=h2
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #25
     counter_tb.top.clock=0
+    counter_tb.clock=0
     counter_tb.top.enable=0
+    counter_tb.enable=0
   #26
     counter_tb.top.clock=1
+    counter_tb.clock=1
 
 Alternation filter — {sig0,vect0} selects exactly two signals:
 
@@ -167,82 +200,109 @@ Multiple --signal flags (OR semantics) — **.clock and **.out on counter_tb:
   $dumpvars
     counter_tb.top.out=bx
     counter_tb.top.clock=1
+    counter_tb.clock=1
     counter_tb.out=bx
   $end
   #1
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #2
     counter_tb.out=h0
     counter_tb.top.out=h0
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #3
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #4
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #5
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #6
     counter_tb.out=h1
     counter_tb.top.out=h1
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #7
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #8
     counter_tb.out=h2
     counter_tb.top.out=h2
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #9
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #10
     counter_tb.out=h3
     counter_tb.top.out=h3
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #11
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #12
     counter_tb.out=h0
     counter_tb.top.out=h0
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #13
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #14
     counter_tb.out=h1
     counter_tb.top.out=h1
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #15
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #16
     counter_tb.out=h2
     counter_tb.top.out=h2
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #17
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #18
     counter_tb.out=h3
     counter_tb.top.out=h3
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #19
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #20
     counter_tb.out=h0
     counter_tb.top.out=h0
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #21
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #22
     counter_tb.out=h1
     counter_tb.top.out=h1
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #23
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #24
     counter_tb.out=h2
     counter_tb.top.out=h2
     counter_tb.top.clock=1
+    counter_tb.clock=1
   #25
     counter_tb.top.clock=0
+    counter_tb.clock=0
   #26
     counter_tb.top.clock=1
+    counter_tb.clock=1
 
 Unmatched --signal pattern emits a warning on stderr:
 
@@ -336,80 +396,107 @@ Unmatched --signal-re pattern emits a warning on stderr:
   $dumpvars
     top.out=bx
     top.clock=1
+    clock=1
     out=bx
   $end
   #1
     top.clock=0
+    clock=0
   #2
     out=h0
     top.out=h0
     top.clock=1
+    clock=1
   #3
     top.clock=0
+    clock=0
   #4
     top.clock=1
+    clock=1
   #5
     top.clock=0
+    clock=0
   #6
     out=h1
     top.out=h1
     top.clock=1
+    clock=1
   #7
     top.clock=0
+    clock=0
   #8
     out=h2
     top.out=h2
     top.clock=1
+    clock=1
   #9
     top.clock=0
+    clock=0
   #10
     out=h3
     top.out=h3
     top.clock=1
+    clock=1
   #11
     top.clock=0
+    clock=0
   #12
     out=h0
     top.out=h0
     top.clock=1
+    clock=1
   #13
     top.clock=0
+    clock=0
   #14
     out=h1
     top.out=h1
     top.clock=1
+    clock=1
   #15
     top.clock=0
+    clock=0
   #16
     out=h2
     top.out=h2
     top.clock=1
+    clock=1
   #17
     top.clock=0
+    clock=0
   #18
     out=h3
     top.out=h3
     top.clock=1
+    clock=1
   #19
     top.clock=0
+    clock=0
   #20
     out=h0
     top.out=h0
     top.clock=1
+    clock=1
   #21
     top.clock=0
+    clock=0
   #22
     out=h1
     top.out=h1
     top.clock=1
+    clock=1
   #23
     top.clock=0
+    clock=0
   #24
     out=h2
     top.out=h2
     top.clock=1
+    clock=1
   #25
     top.clock=0
+    clock=0
   #26
     top.clock=1
+    clock=1
 

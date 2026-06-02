@@ -59,7 +59,9 @@ let parse_file path =
 (* ------------------------------------------------------------------ *)
 
 module Resolver = struct
-  type entry = { scope_type : Vcd_ast.scope_type; var : Vcd_ast.var_decl; reference : Vcd_types.Reference.t }
+  module Ref_set = Set.Make (Vcd_types.Reference)
+
+  type entry = { id : Vcd_types.ID.t; size : int; references : Ref_set.t }
 
   module By_id = Map.Make (Vcd_types.ID)
   module By_ref = Map.Make (Vcd_types.Reference)
@@ -69,30 +71,35 @@ module Resolver = struct
   let make header =
     let open Vcd_ast in
     let open Vcd_types.Reference in
-    let rec collect path scope_type vars children (by_id, by_ref) =
+    let rec collect path vars children (by_id, by_ref) =
       let by_id, by_ref =
         List.fold_left
           (fun (by_id, by_ref) var ->
             let r = push var.ref path in
-            (By_id.add var.id { scope_type; var; reference = r } by_id, By_ref.add r var.id by_ref))
+            let entry =
+              match By_id.find_opt var.id by_id with
+              | None -> { id = var.id; size = var.size; references = Ref_set.singleton r }
+              | Some e -> { e with references = Ref_set.add r e.references }
+            in
+            (By_id.add var.id entry by_id, By_ref.add r var.id by_ref))
           (by_id, by_ref) vars
       in
       List.fold_left
-        (fun acc child -> collect (push child.s_name path) child.s_type child.vars child.children acc)
+        (fun acc child -> collect (push child.s_name path) child.vars child.children acc)
         (by_id, by_ref) children
     in
     let by_id, by_ref =
       List.fold_left
-        (fun acc scope -> collect (push scope.s_name empty) scope.s_type scope.vars scope.children acc)
+        (fun acc scope -> collect (push scope.s_name empty) scope.vars scope.children acc)
         (By_id.empty, By_ref.empty) header.scopes
     in
     { by_id; by_ref }
 
-  let entry_id e = e.var.id
-  let entry_size e = e.var.size
-  let entry_reference e = e.reference
+  let entry_id e = e.id
+  let entry_size e = e.size
+  let entry_references e = e.references
   let find t id = By_id.find_opt id t.by_id
-  let reference t id = Option.map (fun e -> e.reference) (find t id)
+  let references t id = match By_id.find_opt id t.by_id with None -> Ref_set.empty | Some e -> e.references
   let find_id t ref = By_ref.find_opt ref t.by_ref
   let fold f t acc = By_id.fold (fun _ e a -> f e a) t.by_id acc
 end

@@ -118,11 +118,17 @@ let () =
           let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
           let resolve id =
             match Vcd.Resolver.find resolver id with
-            | None -> (Vcd_types.ID.to_string id, 0)
+            | None -> ([ Vcd_types.ID.to_string id ], 0)
             | Some entry ->
-                let r = Vcd.Resolver.entry_reference entry in
-                let display = match strip_map with None -> r | Some f -> f r in
-                (Vcd_types.Reference.to_string display, Vcd.Resolver.entry_size entry)
+                let size = Vcd.Resolver.entry_size entry in
+                let names =
+                  Vcd.Resolver.Ref_set.fold
+                    (fun r acc ->
+                      let display = match strip_map with None -> r | Some f -> f r in
+                      Vcd_types.Reference.to_string display :: acc)
+                    (Vcd.Resolver.entry_references entry) []
+                in
+                (names, size)
           in
           let cur_in_range = ref (ranges = []) in
           let pending_ts = ref None in
@@ -143,8 +149,8 @@ let () =
                     pending_ts := if in_r then Some t else None
                 | Change (id, v) when !cur_in_range && show_id filter id ->
                     flush ();
-                    let name, size = resolve id in
-                    Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)
+                    let names, size = resolve id in
+                    List.iter (fun name -> Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)) names
                 | Change _ -> ()
                 | DumpStart k when !cur_in_range ->
                     flush ();

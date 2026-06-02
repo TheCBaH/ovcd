@@ -26,12 +26,17 @@ val parse_file : string -> parse_result
     consumed or the caller discards it. *)
 
 module Resolver : sig
+  module Ref_set : Set.S with type elt = Vcd_types.Reference.t
+  (** Set of hierarchical signal references; used to represent all aliases of a single ID. *)
+
   type entry
-  (** Opaque per-signal record. Use the accessors below to inspect it. *)
+  (** Opaque per-signal record. One entry per unique ID; may carry multiple [Reference.t] aliases. *)
 
   val entry_id : entry -> Vcd_types.ID.t
   val entry_size : entry -> int
-  val entry_reference : entry -> Vcd_types.Reference.t
+
+  val entry_references : entry -> Ref_set.t
+  (** All hierarchical names that map to this ID (at least one; more when the signal is aliased). *)
 
   type t
 
@@ -41,8 +46,8 @@ module Resolver : sig
   val find : t -> Vcd_types.ID.t -> entry option
   (** Look up all information for an ID. *)
 
-  val reference : t -> Vcd_types.ID.t -> Vcd_types.Reference.t option
-  (** Convenience: look up just the [Reference.t] for an ID. *)
+  val references : t -> Vcd_types.ID.t -> Ref_set.t
+  (** Convenience: return all [Reference.t] values for an ID; empty set if the ID is unknown. *)
 
   val find_id : t -> Vcd_types.Reference.t -> Vcd_types.ID.t option
   (** Reverse lookup: find the [ID.t] for a given [Reference.t]. *)

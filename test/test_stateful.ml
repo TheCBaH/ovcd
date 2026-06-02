@@ -305,3 +305,58 @@ let%expect_test "no simulation events — empty sequence" =
   let n = Seq.length (stream (stream_of no_sim_vcd)) in
   Printf.printf "events: %d\n" n;
   [%expect {| events: 0 |}]
+
+(* ------------------------------------------------------------------ *)
+(*  Aliased signals (same ID, multiple scopes)                          *)
+(* ------------------------------------------------------------------ *)
+
+(* VCD where ID ! is declared in two scopes — top.clk and top.sub.clk. *)
+let aliased_vcd =
+  {|
+$timescale 1ns $end
+$scope module top $end
+  $var wire 1 ! clk $end
+  $scope module sub $end
+    $var wire 1 ! clk $end
+  $upscope $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpvars
+0!
+$end
+#5
+1!
+#10
+0!
+|}
+
+let%expect_test "aliased signal — one state entry per ID, changes captured once" =
+  Seq.iter pp_event (stream (stream_of aliased_vcd));
+  [%expect {|
+    t=5
+      state: !=0
+      changes: !=1
+    t=10
+      state: !=1
+      changes: !=0 |}]
+
+let%expect_test "aliased signal — tracked filter by ID covers all aliases" =
+  Seq.iter pp_event (stream ~tracked:(id_set [ "!" ]) (stream_of aliased_vcd));
+  [%expect {|
+    t=5
+      state: !=0
+      changes: !=1
+    t=10
+      state: !=1
+      changes: !=0 |}]
+
+let%expect_test "aliased signal — reported filter by ID covers all aliases" =
+  Seq.iter pp_event (stream ~reported:(id_set [ "!" ]) (stream_of aliased_vcd));
+  [%expect {|
+    t=5
+      state: !=0
+      changes: !=1
+    t=10
+      state: !=1
+      changes: !=0 |}]

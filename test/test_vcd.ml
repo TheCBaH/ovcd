@@ -266,15 +266,15 @@ $upscope $end
 $enddefinitions $end
 |}
 
-let%expect_test "Resolver — reference by ID" =
+let%expect_test "Resolver — references by ID" =
   let r = Vcd.parse_string resolver_vcd in
   let resolver = Vcd.Resolver.make r.header in
   List.iter
     (fun id ->
       let id_t = ID.of_string id in
-      match Vcd.Resolver.reference resolver id_t with
-      | Some ref_ -> Printf.printf "%s -> %s\n" id (Reference.to_string ref_)
-      | None -> Printf.printf "%s -> (not found)\n" id)
+      let refs = Vcd.Resolver.references resolver id_t in
+      if Vcd.Resolver.Ref_set.is_empty refs then Printf.printf "%s -> (not found)\n" id
+      else Vcd.Resolver.Ref_set.iter (fun r -> Printf.printf "%s -> %s\n" id (Reference.to_string r)) refs)
     [ "!"; "\""; "#" ];
   [%expect {|
     ! -> tb.clk
@@ -282,15 +282,37 @@ let%expect_test "Resolver — reference by ID" =
     # -> (not found)
     |}]
 
-let%expect_test "Resolver — entry_id and entry_reference" =
+let%expect_test "Resolver — entry_id and entry_references" =
   let r = Vcd.parse_string resolver_vcd in
   let resolver = Vcd.Resolver.make r.header in
   (match Vcd.Resolver.find resolver (ID.of_string "!") with
   | None -> Printf.printf "(not found)\n"
   | Some e ->
       let open Vcd.Resolver in
-      Printf.printf "id=%s reference=%s\n" (ID.to_string (entry_id e)) (Reference.to_string (entry_reference e)));
-  [%expect {| id=! reference=tb.clk |}]
+      let refs = Ref_set.elements (entry_references e) in
+      Printf.printf "id=%s references=%s\n"
+        (ID.to_string (entry_id e))
+        (String.concat "," (List.map Reference.to_string refs)));
+  [%expect {| id=! references=tb.clk |}]
+
+let%expect_test "Resolver — aliased ID has multiple references" =
+  let r = Vcd.parse_string counter_vcd in
+  let resolver = Vcd.Resolver.make r.header in
+  List.iter
+    (fun id ->
+      let refs = Vcd.Resolver.references resolver (ID.of_string id) in
+      Printf.printf "%s (%d refs):" id (Vcd.Resolver.Ref_set.cardinal refs);
+      Vcd.Resolver.Ref_set.iter (fun r -> Printf.printf " %s" (Reference.to_string r)) refs;
+      print_char '\n')
+    [ "!"; "\""; "#"; "$"; "%" ];
+  [%expect
+    {|
+    ! (1 refs): counter_tb.out
+    " (2 refs): counter_tb.clock counter_tb.top.clock
+    # (2 refs): counter_tb.enable counter_tb.top.enable
+    $ (2 refs): counter_tb.reset counter_tb.top.reset
+    % (1 refs): counter_tb.top.out
+    |}]
 
 let%expect_test "Resolver — find_id reverse lookup" =
   let r = Vcd.parse_string resolver_vcd in
