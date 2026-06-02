@@ -62,6 +62,13 @@ type time_range = {
 }
 (** A single half-open or closed time interval. *)
 
+val in_ranges : time_range list -> Vcd_types.Timestamp.t -> bool
+(** [in_ranges ranges t] is [true] when [t] falls inside at least one range, or when [ranges] is empty (all time). *)
+
+val past_all_ranges : time_range list -> Vcd_types.Timestamp.t -> bool
+(** [past_all_ranges ranges t] is [true] when [t] is strictly past every range's [stop]. Always [false] when [ranges] is
+    empty or any range has no [stop]. *)
+
 module Stateful : sig
   module State : Map.S with type key = Vcd_types.ID.t
   (** Map from [ID.t] to [Value.t], used for both full signal state and per-step changes. *)

@@ -128,20 +128,5 @@ let parse_range s : Vcd.time_range =
         Vcd.{ start = Some t; stop = Some t }
     | Some i -> Vcd.{ start = ts_of (String.sub s 0 i); stop = ts_of (String.sub s (i + 1) (String.length s - i - 1)) }
 
-let in_ranges ranges t =
-  match ranges with
-  | [] -> true
-  | _ ->
-      List.exists
-        (fun (r : Vcd.time_range) ->
-          (match r.start with None -> true | Some s -> Vcd_types.Timestamp.compare t s >= 0)
-          && match r.stop with None -> true | Some e -> Vcd_types.Timestamp.compare t e <= 0)
-        ranges
-
-let past_all_ranges ranges t =
-  match ranges with
-  | [] -> false
-  | _ ->
-      List.for_all
-        (fun (r : Vcd.time_range) -> match r.stop with None -> false | Some e -> Vcd_types.Timestamp.compare t e > 0)
-        ranges
+let in_ranges = Vcd.in_ranges
+let past_all_ranges = Vcd.past_all_ranges

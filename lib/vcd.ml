@@ -114,6 +114,26 @@ type time_range = {
 }
 
 (* ------------------------------------------------------------------ *)
+(*  Time-range helpers                                                 *)
+(* ------------------------------------------------------------------ *)
+
+let in_ranges ranges t =
+  match ranges with
+  | [] -> true
+  | _ ->
+      List.exists
+        (fun r ->
+          (match r.start with None -> true | Some s -> Vcd_types.Timestamp.compare t s >= 0)
+          && match r.stop with None -> true | Some e -> Vcd_types.Timestamp.compare t e <= 0)
+        ranges
+
+let past_all_ranges ranges t =
+  match ranges with
+  | [] -> false
+  | _ ->
+      List.for_all (fun r -> match r.stop with None -> false | Some e -> Vcd_types.Timestamp.compare t e > 0) ranges
+
+(* ------------------------------------------------------------------ *)
 (*  Stateful stream                                                    *)
 (* ------------------------------------------------------------------ *)
 
@@ -126,22 +146,6 @@ module Stateful = struct
   let find state id = State.find_opt id state
 
   type event = { state : state; time : Vcd_types.Timestamp.t; changes : state }
-
-  let in_ranges ranges t =
-    match ranges with
-    | [] -> true
-    | _ ->
-        List.exists
-          (fun r ->
-            (match r.start with None -> true | Some s -> Vcd_types.Timestamp.compare t s >= 0)
-            && match r.stop with None -> true | Some e -> Vcd_types.Timestamp.compare t e <= 0)
-          ranges
-
-  let past_all_ranges ranges t =
-    match ranges with
-    | [] -> false
-    | _ ->
-        List.for_all (fun r -> match r.stop with None -> false | Some e -> Vcd_types.Timestamp.compare t e > 0) ranges
 
   let stream ?tracked ?reported ?(ranges : time_range list = []) events =
     let is_tracked id = match tracked with None -> true | Some s -> ID_set.mem id s in
