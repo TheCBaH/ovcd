@@ -1,7 +1,7 @@
 (library
  (name vcd_tests)
  (wrapped false)
- (modules test_lexer test_parser test_parse filter_parse filter_match)
+ (modules test_lexer test_header_parser test_vcd test_filter_parse test_filter_match)
  (libraries vcd vcd_filter)
  (inline_tests)
  (preprocess

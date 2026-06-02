@@ -2,4 +2,4 @@
  (name vcd_dump)
  (public_name vcd_dump)
  (package vcd)
- (libraries vcd vcd_filter re))
+ (libraries vcd vcd_util vcd_filter re))

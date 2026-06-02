@@ -1,6 +1,5 @@
 open Vcd_ast
-module ID_set = Set.Make (Vcd_types.ID)
-module Ref_map = Map.Make (Vcd_types.Reference)
+module ID_set = Vcd_util.ID_set
 
 let opt f = function None -> "(none)" | Some x -> f x
 
@@ -17,82 +16,7 @@ let count_scopes_and_vars scopes =
   let rec walk (ns, nv) s = List.fold_left walk (ns + 1, nv + List.length s.vars) s.children in
   List.fold_left walk (0, 0) scopes
 
-(* Build an ID set from DSL patterns and/or compiled regexes.
-   Warns for each pattern or regex that matched no signal. *)
-let build_filter resolver patterns regexes =
-  if patterns = [] && regexes = [] then None
-  else begin
-    let id_set =
-      Vcd.Resolver.fold
-        (fun entry acc ->
-          let ref_ = Vcd.Resolver.entry_reference entry in
-          if
-            List.exists (fun (_, pat) -> Filter_matcher.matches pat ref_) patterns
-            ||
-            match regexes with
-            | [] -> false
-            | _ ->
-                let name = Vcd_types.Reference.to_string ref_ in
-                List.exists (fun (_, re) -> Re.execp re name) regexes
-          then ID_set.add (Vcd.Resolver.entry_id entry) acc
-          else acc)
-        resolver ID_set.empty
-    in
-    let any_ref_matches f = Vcd.Resolver.fold (fun e b -> b || f (Vcd.Resolver.entry_reference e)) resolver false in
-    List.iter
-      (fun (s, pat) ->
-        if not (any_ref_matches (Filter_matcher.matches pat)) then
-          Printf.eprintf "warning: --signal %S matched no signals\n" s)
-      patterns;
-    List.iter
-      (fun (s, re) ->
-        if not (any_ref_matches (fun r -> Re.execp re (Vcd_types.Reference.to_string r))) then
-          Printf.eprintf "warning: --signal-re %S matched no signals\n" s)
-      regexes;
-    Some id_set
-  end
-
 let show_id filter id = match filter with None -> true | Some s -> ID_set.mem id s
-
-(* Longest common component prefix of a list of component-lists, guaranteed
-   shorter than the shortest input (so no signal is stripped to empty). *)
-let common_prefix_components lists =
-  let rec common2 = function x :: xs, y :: ys when String.equal x y -> x :: common2 (xs, ys) | _ -> [] in
-  match lists with
-  | [] -> []
-  | first :: rest ->
-      let prefix = List.fold_left (fun p l -> common2 (p, l)) first rest in
-      let min_len = List.fold_left (fun m l -> min m (List.length l)) max_int lists in
-      List.filteri (fun i _ -> i < min (List.length prefix) (max 0 (min_len - 1))) prefix
-
-(* Resolves all matched signals to References, finds the common prefix, and
-   builds a Reference -> stripped_Reference map.  Returns None when the common
-   prefix is empty.  filter=None means all signals matched. *)
-let build_strip_map resolver filter =
-  let matched =
-    match filter with
-    | None -> Vcd.Resolver.fold (fun entry acc -> Vcd.Resolver.entry_reference entry :: acc) resolver []
-    | Some ids ->
-        ID_set.fold
-          (fun id acc ->
-            match Vcd.Resolver.find resolver id with
-            | Some entry -> Vcd.Resolver.entry_reference entry :: acc
-            | None -> acc)
-          ids []
-  in
-  match common_prefix_components (List.rev_map Vcd_types.Reference.to_list matched) with
-  | [] -> None
-  | prefix ->
-      let rec drop_prefix_aux = function
-        | [], rest | _ :: _, ([] as rest) -> rest
-        | _ :: pfx, _ :: comps -> drop_prefix_aux (pfx, comps)
-      in
-      Some
-        (List.fold_left
-           (fun m r ->
-             let stripped = Vcd_types.Reference.of_list (drop_prefix_aux (prefix, Vcd_types.Reference.to_list r)) in
-             Ref_map.add r stripped m)
-           Ref_map.empty matched)
 
 let () =
   let summary = ref false in
@@ -168,7 +92,7 @@ let () =
           let r = parse () in
           if !resolve then begin
             let resolver = Vcd.Resolver.make r.header in
-            let filter = build_filter resolver patterns regexes in
+            let filter = Vcd_util.build_filter resolver patterns regexes in
             Seq.iter (function Change (id, _) when show_id filter id -> () | _ -> ()) r.simulation
           end
           else Seq.iter ignore r.simulation
@@ -179,17 +103,14 @@ let () =
         let h = result.header in
         if !resolve then begin
           let resolver = Vcd.Resolver.make h in
-          let filter = build_filter resolver patterns regexes in
-          let strip_map = if !strip then build_strip_map resolver filter else None in
-          (* Returns (display_name, signal_size) for an ID. *)
+          let filter = Vcd_util.build_filter resolver patterns regexes in
+          let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
           let resolve id =
             match Vcd.Resolver.find resolver id with
             | None -> (Vcd_types.ID.to_string id, 0)
             | Some entry ->
                 let r = Vcd.Resolver.entry_reference entry in
-                let display =
-                  match strip_map with None -> r | Some m -> Option.value ~default:r (Ref_map.find_opt r m)
-                in
+                let display = match strip_map with None -> r | Some f -> f r in
                 (Vcd_types.Reference.to_string display, Vcd.Resolver.entry_size entry)
           in
           let pending_ts = ref None in

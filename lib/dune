@@ -6,6 +6,12 @@
  (ocamlopt_flags
   (:standard -O3)))
 
+(library
+ (name vcd_util)
+ (wrapped false)
+ (modules vcd_util)
+ (libraries vcd vcd_filter re))
+
 (ocamllex
  (modules vcd_lexer))
 
