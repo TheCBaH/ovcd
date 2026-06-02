@@ -18,6 +18,22 @@
  (action
   (copy %{exe:../bin/vcd_dump.exe} %{target})))
 
+(rule
+ (target vcd_tool)
+ (action
+  (copy %{exe:../bin/vcd_tool.exe} %{target})))
+
+(cram
+ (applies_to vcd_tool)
+ (deps
+  vcd_tool
+  ; vcdvcd
+  ../test-data/vcdvcd/counter_tb.vcd
+  ; pyDigitalWaveTools
+  ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  ; digital-vcd-parser
+  ../test-data/digital-vcd-parser/test/debug/verilater.vcd))
+
 (cram
  (applies_to icarus synopsys ieee misc resolve)
  (deps
