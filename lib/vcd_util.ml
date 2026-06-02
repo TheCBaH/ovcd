@@ -1,23 +1,31 @@
 module ID_set = Vcd.Stateful.ID_set
+module ID_map = Map.Make (Vcd_types.ID)
 module Ref_map = Map.Make (Vcd_types.Reference)
+
+(* Map from each matched ID to the specific subset of its references that
+   the user's patterns selected. Kept separate from ID_set so display code
+   can avoid printing unselected aliases of a matched ID. *)
+type filter = Vcd.Resolver.Ref_set.t ID_map.t
+
+let ref_matches_any patterns regexes r =
+  List.exists (fun (_, pat) -> Filter_matcher.matches pat r) patterns
+  ||
+  match regexes with
+  | [] -> false
+  | _ -> List.exists (fun (_, re) -> Re.execp re (Vcd_types.Reference.to_string r)) regexes
 
 let build_filter resolver patterns regexes =
   if patterns = [] && regexes = [] then None
   else begin
-    let id_set =
+    let id_map =
       Vcd.Resolver.fold
         (fun entry acc ->
-          let refs = Vcd.Resolver.entry_references entry in
-          let any_ref f = Vcd.Resolver.Ref_set.exists f refs in
-          if
-            List.exists (fun (_, pat) -> any_ref (Filter_matcher.matches pat)) patterns
-            ||
-            match regexes with
-            | [] -> false
-            | _ -> List.exists (fun (_, re) -> any_ref (fun r -> Re.execp re (Vcd_types.Reference.to_string r))) regexes
-          then ID_set.add (Vcd.Resolver.entry_id entry) acc
-          else acc)
-        resolver ID_set.empty
+          let matched_refs =
+            Vcd.Resolver.Ref_set.filter (ref_matches_any patterns regexes) (Vcd.Resolver.entry_references entry)
+          in
+          if Vcd.Resolver.Ref_set.is_empty matched_refs then acc
+          else ID_map.add (Vcd.Resolver.entry_id entry) matched_refs acc)
+        resolver ID_map.empty
     in
     let any_ref_matches f =
       Vcd.Resolver.fold (fun e b -> b || Vcd.Resolver.Ref_set.exists f (Vcd.Resolver.entry_references e)) resolver false
@@ -32,8 +40,16 @@ let build_filter resolver patterns regexes =
         if not (any_ref_matches (fun r -> Re.execp re (Vcd_types.Reference.to_string r))) then
           Printf.eprintf "warning: --signal-re %S matched no signals\n" s)
       regexes;
-    Some id_set
+    Some id_map
   end
+
+let filter_ids f = ID_map.fold (fun id _ acc -> ID_set.add id acc) f ID_set.empty
+let mem_filter filter id = match filter with None -> true | Some m -> ID_map.mem id m
+
+let selected_refs resolver filter id =
+  match filter with
+  | None -> Vcd.Resolver.references resolver id
+  | Some m -> Option.value ~default:Vcd.Resolver.Ref_set.empty (ID_map.find_opt id m)
 
 let build_strip_map resolver filter =
   let matched =
@@ -42,13 +58,7 @@ let build_strip_map resolver filter =
         Vcd.Resolver.fold
           (fun entry acc -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) (Vcd.Resolver.entry_references entry) acc)
           resolver []
-    | Some ids ->
-        ID_set.fold
-          (fun id acc ->
-            match Vcd.Resolver.find resolver id with
-            | Some entry -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) (Vcd.Resolver.entry_references entry) acc
-            | None -> acc)
-          ids []
+    | Some m -> ID_map.fold (fun _ refs acc -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) refs acc) m []
   in
   let rec common2 = function x :: xs, y :: ys when String.equal x y -> x :: common2 (xs, ys) | _ -> [] in
   let lists = List.rev_map Vcd_types.Reference.to_list matched in

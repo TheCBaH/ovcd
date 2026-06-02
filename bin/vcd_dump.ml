@@ -16,7 +16,7 @@ let count_scopes_and_vars scopes =
   let rec walk (ns, nv) s = List.fold_left walk (ns + 1, nv + List.length s.vars) s.children in
   List.fold_left walk (0, 0) scopes
 
-let show_id filter id = match filter with None -> true | Some s -> ID_set.mem id s
+let show_id filter id = Vcd_util.mem_filter filter id
 
 let () =
   let summary = ref false in
@@ -126,7 +126,8 @@ let () =
                     (fun r acc ->
                       let display = match strip_map with None -> r | Some f -> f r in
                       Vcd_types.Reference.to_string display :: acc)
-                    (Vcd.Resolver.entry_references entry) []
+                    (Vcd_util.selected_refs resolver filter id)
+                    []
                 in
                 (names, size)
           in

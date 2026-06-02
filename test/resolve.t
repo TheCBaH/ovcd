@@ -500,3 +500,124 @@ Unmatched --signal-re pattern emits a warning on stderr:
     top.clock=1
     clock=1
 
+Exact alias selection — counter_tb.clock selects only the outer alias; counter_tb.top.clock is not printed
+even though both share the same ID:
+
+  $ ./vcd_dump --resolve --signal 'counter_tb.clock' ../test-data/vcdvcd/counter_tb.vcd
+  #0
+  $dumpvars
+    counter_tb.clock=1
+  $end
+  #1
+    counter_tb.clock=0
+  #2
+    counter_tb.clock=1
+  #3
+    counter_tb.clock=0
+  #4
+    counter_tb.clock=1
+  #5
+    counter_tb.clock=0
+  #6
+    counter_tb.clock=1
+  #7
+    counter_tb.clock=0
+  #8
+    counter_tb.clock=1
+  #9
+    counter_tb.clock=0
+  #10
+    counter_tb.clock=1
+  #11
+    counter_tb.clock=0
+  #12
+    counter_tb.clock=1
+  #13
+    counter_tb.clock=0
+  #14
+    counter_tb.clock=1
+  #15
+    counter_tb.clock=0
+  #16
+    counter_tb.clock=1
+  #17
+    counter_tb.clock=0
+  #18
+    counter_tb.clock=1
+  #19
+    counter_tb.clock=0
+  #20
+    counter_tb.clock=1
+  #21
+    counter_tb.clock=0
+  #22
+    counter_tb.clock=1
+  #23
+    counter_tb.clock=0
+  #24
+    counter_tb.clock=1
+  #25
+    counter_tb.clock=0
+  #26
+    counter_tb.clock=1
+
+Exact alias selection — counter_tb.top.clock selects only the inner alias:
+
+  $ ./vcd_dump --resolve --signal 'counter_tb.top.clock' ../test-data/vcdvcd/counter_tb.vcd
+  #0
+  $dumpvars
+    counter_tb.top.clock=1
+  $end
+  #1
+    counter_tb.top.clock=0
+  #2
+    counter_tb.top.clock=1
+  #3
+    counter_tb.top.clock=0
+  #4
+    counter_tb.top.clock=1
+  #5
+    counter_tb.top.clock=0
+  #6
+    counter_tb.top.clock=1
+  #7
+    counter_tb.top.clock=0
+  #8
+    counter_tb.top.clock=1
+  #9
+    counter_tb.top.clock=0
+  #10
+    counter_tb.top.clock=1
+  #11
+    counter_tb.top.clock=0
+  #12
+    counter_tb.top.clock=1
+  #13
+    counter_tb.top.clock=0
+  #14
+    counter_tb.top.clock=1
+  #15
+    counter_tb.top.clock=0
+  #16
+    counter_tb.top.clock=1
+  #17
+    counter_tb.top.clock=0
+  #18
+    counter_tb.top.clock=1
+  #19
+    counter_tb.top.clock=0
+  #20
+    counter_tb.top.clock=1
+  #21
+    counter_tb.top.clock=0
+  #22
+    counter_tb.top.clock=1
+  #23
+    counter_tb.top.clock=0
+  #24
+    counter_tb.top.clock=1
+  #25
+    counter_tb.top.clock=0
+  #26
+    counter_tb.top.clock=1
+

@@ -1,21 +1,17 @@
 module Stateful = Vcd.Stateful
-module ID_set = Vcd_util.ID_set
 
-let pp_changes resolver strip_map id_set ev =
+let pp_changes resolver strip_map filter ev =
   Stateful.State.iter
     (fun id v ->
       match Vcd.Resolver.find resolver id with
       | None -> ()
       | Some entry ->
-          let show = match id_set with None -> true | Some s -> ID_set.mem id s in
-          if show then begin
-            let size = Vcd.Resolver.entry_size entry in
-            Vcd.Resolver.Ref_set.iter
-              (fun r ->
-                let display = match strip_map with None -> r | Some f -> f r in
-                Format.printf "  %s=%s\n" (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))
-              (Vcd.Resolver.entry_references entry)
-          end)
+          let size = Vcd.Resolver.entry_size entry in
+          Vcd.Resolver.Ref_set.iter
+            (fun r ->
+              let display = match strip_map with None -> r | Some f -> f r in
+              Format.printf "  %s=%s\n" (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))
+            (Vcd_util.selected_refs resolver filter id))
     ev.Stateful.changes
 
 let () =
@@ -88,7 +84,7 @@ let () =
       let events =
         match filter with
         | None -> Stateful.stream ~ranges result.simulation
-        | Some ids -> Stateful.stream ~reported:ids ~ranges result.simulation
+        | Some f -> Stateful.stream ~reported:(Vcd_util.filter_ids f) ~ranges result.simulation
       in
       Seq.iter
         (fun ev ->
