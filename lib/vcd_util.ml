@@ -66,3 +66,69 @@ let build_strip_map resolver filter =
           Ref_map.empty matched
       in
       Some (fun r -> Option.value ~default:r (Ref_map.find_opt r tbl))
+
+let parse_range s : Vcd.time_range =
+  let ts_of str =
+    let str = String.trim str in
+    if str = "" then None else Some (Vcd_types.Timestamp.of_string str)
+  in
+  let starts_with2 s = String.length s >= 2 && s.[0] = '.' && s.[1] = '.' in
+  let ends_with2 s =
+    let n = String.length s in
+    n >= 2 && s.[n - 2] = '.' && s.[n - 1] = '.'
+  in
+  let strip_leading_dots s =
+    let i = ref 0 in
+    while !i < String.length s && s.[!i] = '.' do
+      incr i
+    done;
+    String.sub s !i (String.length s - !i)
+  in
+  let strip_trailing_dots s =
+    let n = String.length s in
+    let i = ref n in
+    while !i > 0 && s.[!i - 1] = '.' do
+      decr i
+    done;
+    String.sub s 0 !i
+  in
+  let s = String.trim s in
+  if starts_with2 s then
+    let rest = String.trim (strip_leading_dots s) in
+    let rest =
+      if String.length rest > 0 && rest.[0] = '-' then String.trim (String.sub rest 1 (String.length rest - 1))
+      else rest
+    in
+    Vcd.{ start = None; stop = ts_of rest }
+  else if ends_with2 s then
+    let rest = String.trim (strip_trailing_dots s) in
+    let rest =
+      let n = String.length rest in
+      if n > 0 && rest.[n - 1] = '-' then String.trim (String.sub rest 0 (n - 1)) else rest
+    in
+    Vcd.{ start = ts_of rest; stop = None }
+  else
+    match String.index_opt s '-' with
+    | None ->
+        let t = Option.get (ts_of s) in
+        Vcd.{ start = Some t; stop = Some t }
+    | Some i ->
+        Vcd.{ start = ts_of (String.sub s 0 i); stop = ts_of (String.sub s (i + 1) (String.length s - i - 1)) }
+
+let in_ranges ranges t =
+  match ranges with
+  | [] -> true
+  | _ ->
+      List.exists
+        (fun (r : Vcd.time_range) ->
+          (match r.start with None -> true | Some s -> Vcd_types.Timestamp.compare t s >= 0)
+          && match r.stop with None -> true | Some e -> Vcd_types.Timestamp.compare t e <= 0)
+        ranges
+
+let past_all_ranges ranges t =
+  match ranges with
+  | [] -> false
+  | _ ->
+      List.for_all
+        (fun (r : Vcd.time_range) -> match r.stop with None -> false | Some e -> Vcd_types.Timestamp.compare t e > 0)
+        ranges

@@ -51,5 +51,11 @@ module Resolver : sig
   (** Fold over all entries in declaration order. *)
 end
 
+type time_range = {
+  start : Vcd_types.Timestamp.t option;  (** Inclusive lower bound; [None] means "from the beginning". *)
+  stop : Vcd_types.Timestamp.t option;  (** Inclusive upper bound; [None] means "to the end". *)
+}
+(** A single half-open or closed time interval. *)
+
 val string_of_scope_type : Vcd_ast.scope_type -> string
 val string_of_var_type : Vcd_ast.var_type -> string

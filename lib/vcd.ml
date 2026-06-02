@@ -98,6 +98,15 @@ module Resolver = struct
 end
 
 (* ------------------------------------------------------------------ *)
+(*  Time range                                                         *)
+(* ------------------------------------------------------------------ *)
+
+type time_range = {
+  start : Vcd_types.Timestamp.t option;  (** Inclusive lower bound; [None] means "from the beginning". *)
+  stop : Vcd_types.Timestamp.t option;  (** Inclusive upper bound; [None] means "to the end". *)
+}
+
+(* ------------------------------------------------------------------ *)
 (*  Pretty-printing helpers                                            *)
 (* ------------------------------------------------------------------ *)
 

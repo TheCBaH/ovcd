@@ -23,6 +23,7 @@ let () =
   let bench_runs = ref 0 in
   let resolve = ref false in
   let strip = ref false in
+  let ranges = ref [] in
   let patterns = ref [] in
   let regexes = ref [] in
   let files = ref [] in
@@ -41,6 +42,15 @@ let () =
       ( "--strip",
         Arg.Set strip,
         " Strip the longest common scope prefix from all matched signal names (requires --resolve)" );
+      ( "--range",
+        Arg.String
+          (fun s ->
+            match Vcd_util.parse_range s with
+            | exception Failure msg ->
+                Printf.eprintf "error: invalid --range %S: %s\n" s msg;
+                exit 1
+            | r -> ranges := r :: !ranges),
+        "SPEC  Restrict to a time range, e.g. \"...1000\" or \"0-500\" or \"2000-...\"; may be repeated" );
       ( "--signal",
         Arg.String
           (fun s ->
@@ -62,11 +72,12 @@ let () =
     ]
   in
   let usage =
-    "usage: vcd_dump [--summary] [--bench N] [--resolve] [--strip] [--signal PATTERN]... [--signal-re REGEX]... \
-     <file.vcd>"
+    "usage: vcd_dump [--summary] [--bench N] [--resolve] [--strip] [--range SPEC]... [--signal PATTERN]... \
+     [--signal-re REGEX]... <file.vcd>"
   in
   Arg.parse spec (fun f -> files := f :: !files) usage;
   let files = List.rev !files in
+  let ranges = List.rev !ranges in
   let patterns = List.rev !patterns in
   let regexes = List.rev !regexes in
   if files = [] then (
@@ -113,6 +124,7 @@ let () =
                 let display = match strip_map with None -> r | Some f -> f r in
                 (Vcd_types.Reference.to_string display, Vcd.Resolver.entry_size entry)
           in
+          let cur_in_range = ref (ranges = []) in
           let pending_ts = ref None in
           let flush () =
             match !pending_ts with
@@ -121,22 +133,31 @@ let () =
                 Format.printf "#%a\n" Vcd_types.Timestamp.pp t;
                 pending_ts := None
           in
-          Seq.iter
-            (function
-              | Timestamp t -> pending_ts := Some t
-              | Change (id, v) when show_id filter id ->
-                  flush ();
-                  let name, size = resolve id in
-                  Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)
-              | Change _ -> ()
-              | DumpStart k ->
-                  flush ();
-                  Format.printf "$%s\n" k
-              | DumpEnd -> Format.printf "$end\n"
-              | SimComment c ->
-                  flush ();
-                  Format.printf "//%s\n" c)
-            result.simulation
+          (try
+             Seq.iter
+               (function
+                 | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
+                 | Timestamp t ->
+                     let in_r = Vcd_util.in_ranges ranges t in
+                     cur_in_range := in_r;
+                     pending_ts := if in_r then Some t else None
+                 | Change (id, v) when !cur_in_range && show_id filter id ->
+                     flush ();
+                     let name, size = resolve id in
+                     Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)
+                 | Change _ -> ()
+                 | DumpStart k when !cur_in_range ->
+                     flush ();
+                     Format.printf "$%s\n" k
+                 | DumpStart _ -> ()
+                 | DumpEnd when !cur_in_range -> Format.printf "$end\n"
+                 | DumpEnd -> ()
+                 | SimComment c when !cur_in_range ->
+                     flush ();
+                     Format.printf "//%s\n" c
+                 | SimComment _ -> ())
+               result.simulation
+           with Exit -> ())
         end
         else begin
           Printf.printf "file:      %s\n" (Filename.basename path);
@@ -148,15 +169,22 @@ let () =
             Printf.printf "scopes:    %d  vars: %d\n" ns nv
           end
           else List.iter (pp_scope "") h.scopes;
+          let cur_in_range = ref (ranges = []) in
           let timestamps = ref 0 and changes = ref 0 and dumps = ref 0 and comments = ref 0 in
-          Seq.iter
-            (function
-              | Timestamp _ -> incr timestamps
-              | Change _ -> incr changes
-              | DumpStart _ -> incr dumps
-              | DumpEnd -> ()
-              | SimComment _ -> incr comments)
-            result.simulation;
+          (try
+             Seq.iter
+               (function
+                 | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
+                 | Timestamp t ->
+                     let in_r = Vcd_util.in_ranges ranges t in
+                     cur_in_range := in_r;
+                     if in_r then incr timestamps
+                 | Change _ -> if !cur_in_range then incr changes
+                 | DumpStart _ -> if !cur_in_range then incr dumps
+                 | DumpEnd -> ()
+                 | SimComment _ -> if !cur_in_range then incr comments)
+               result.simulation
+           with Exit -> ());
           Printf.printf "events:    %d (timestamps: %d, changes: %d, dumps: %d, comments: %d)\n"
             (!timestamps + !changes + !dumps + !comments)
             !timestamps !changes !dumps !comments
