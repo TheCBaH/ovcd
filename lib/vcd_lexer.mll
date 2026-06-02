@@ -57,6 +57,15 @@
      '0' = 0x30, '1' = 0x31 — the low bit is the digit value. *)
   let bit c = Char.code c land 1
 
+  let nibble c1 c2 c3 c4 =
+    bit c1 lsl 3 lor bit c2 lsl 2 lor bit c3 lsl 1 lor bit c4
+
+  let byte c1 c2 c3 c4 c5 c6 c7 c8 =
+    nibble c1 c2 c3 c4 lsl 4 lor nibble c5 c6 c7 c8
+
+  let int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 =
+    byte c1 c2 c3 c4 c5 c6 c7 c8 lsl 8 lor byte c9 c10 c11 c12 c13 c14 c15 c16
+
   let mkid = Vcd_types.ID.of_string
 }
 
@@ -135,16 +144,13 @@ and next_event = parse
   (* 4 bits *)
   | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3) (digit_01 as c4)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            bit c1 lsl 3 lor bit c2 lsl 2 lor bit c3 lsl 1 lor bit c4))) }
+      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (nibble c1 c2 c3 c4))) }
 
   (* 8 bits *)
   | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3) (digit_01 as c4)
             (digit_01 as c5) (digit_01 as c6) (digit_01 as c7) (digit_01 as c8)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            bit c1 lsl 7 lor bit c2 lsl 6 lor bit c3 lsl 5 lor bit c4 lsl 4 lor
-            bit c5 lsl 3 lor bit c6 lsl 2 lor bit c7 lsl 1 lor bit c8))) }
+      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (byte c1 c2 c3 c4 c5 c6 c7 c8))) }
 
   (* 16 bits → Int (2^16−1 = 65535, fits in any OCaml int) *)
   | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
@@ -153,10 +159,7 @@ and next_event = parse
             (digit_01 as c13) (digit_01 as c14) (digit_01 as c15) (digit_01 as c16)
             white+ (word as id)
       { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            bit c1  lsl 15 lor bit c2  lsl 14 lor bit c3  lsl 13 lor bit c4  lsl 12 lor
-            bit c5  lsl 11 lor bit c6  lsl 10 lor bit c7  lsl  9 lor bit c8  lsl  8 lor
-            bit c9  lsl  7 lor bit c10 lsl  6 lor bit c11 lsl  5 lor bit c12 lsl  4 lor
-            bit c13 lsl  3 lor bit c14 lsl  2 lor bit c15 lsl  1 lor bit c16))) }
+            int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16))) }
 
   (* 24 bits → Int (2^24−1 = 16 777 215, still fits in the 31-bit minimum OCaml int) *)
   | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
@@ -167,12 +170,8 @@ and next_event = parse
             (digit_01 as c21) (digit_01 as c22) (digit_01 as c23) (digit_01 as c24)
             white+ (word as id)
       { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            bit c1  lsl 23 lor bit c2  lsl 22 lor bit c3  lsl 21 lor bit c4  lsl 20 lor
-            bit c5  lsl 19 lor bit c6  lsl 18 lor bit c7  lsl 17 lor bit c8  lsl 16 lor
-            bit c9  lsl 15 lor bit c10 lsl 14 lor bit c11 lsl 13 lor bit c12 lsl 12 lor
-            bit c13 lsl 11 lor bit c14 lsl 10 lor bit c15 lsl  9 lor bit c16 lsl  8 lor
-            bit c17 lsl  7 lor bit c18 lsl  6 lor bit c19 lsl  5 lor bit c20 lsl  4 lor
-            bit c21 lsl  3 lor bit c22 lsl  2 lor bit c23 lsl  1 lor bit c24))) }
+            int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 lsl 8 lor
+            byte c17 c18 c19 c20 c21 c22 c23 c24))) }
 
   (* 32 bits → Bytes (4 bytes, MSB first; 2^32−1 exceeds the 31-bit minimum OCaml int) *)
   | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
@@ -184,17 +183,10 @@ and next_event = parse
             (digit_01 as c25) (digit_01 as c26) (digit_01 as c27) (digit_01 as c28)
             (digit_01 as c29) (digit_01 as c30) (digit_01 as c31) (digit_01 as c32)
             white+ (word as id)
-      { (* Combine two portable 16-bit native-int halves into an int64. *)
-        let hi =
-          bit c1  lsl 15 lor bit c2  lsl 14 lor bit c3  lsl 13 lor bit c4  lsl 12 lor
-          bit c5  lsl 11 lor bit c6  lsl 10 lor bit c7  lsl  9 lor bit c8  lsl  8 lor
-          bit c9  lsl  7 lor bit c10 lsl  6 lor bit c11 lsl  5 lor bit c12 lsl  4 lor
-          bit c13 lsl  3 lor bit c14 lsl  2 lor bit c15 lsl  1 lor bit c16 in
-        let lo =
-          bit c17 lsl 15 lor bit c18 lsl 14 lor bit c19 lsl 13 lor bit c20 lsl 12 lor
-          bit c21 lsl 11 lor bit c22 lsl 10 lor bit c23 lsl  9 lor bit c24 lsl  8 lor
-          bit c25 lsl  7 lor bit c26 lsl  6 lor bit c27 lsl  5 lor bit c28 lsl  4 lor
-          bit c29 lsl  3 lor bit c30 lsl  2 lor bit c31 lsl  1 lor bit c32 in
+      { let hi = int16 c1  c2  c3  c4  c5  c6  c7  c8
+                         c9  c10 c11 c12 c13 c14 c15 c16 in
+        let lo = int16 c17 c18 c19 c20 c21 c22 c23 c24
+                       c25 c26 c27 c28 c29 c30 c31 c32 in
         let v = Int64.logor (Int64.shift_left (Int64.of_int hi) 16)
                             (Int64.of_int lo) in
         Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int64 v)) }
