@@ -57,5 +57,41 @@ type time_range = {
 }
 (** A single half-open or closed time interval. *)
 
+module Stateful : sig
+  module State : Map.S with type key = Vcd_types.ID.t
+  (** Map from [ID.t] to [Value.t], used for both full signal state and per-step changes. *)
+
+  module ID_set : Set.S with type elt = Vcd_types.ID.t
+
+  type state = Vcd_types.Value.t State.t
+
+  val find : state -> Vcd_types.ID.t -> Vcd_types.Value.t option
+  (** [find state id] returns the current value of [id] in [state], or [None] if unseen. *)
+
+  type event = {
+    state : state;  (** Complete tracked state as of the end of the previous timestep. *)
+    time : Vcd_types.Timestamp.t;
+    changes : state;
+        (** IDs whose values are reported at [time]. Outside dump blocks this is the delta — only IDs that actually
+            changed. At the first timestep inside each [ranges] interval this is a full snapshot of every [reported] ID
+            in the current tracked state, so that the consumer sees values that changed while the stream was outside the
+            range. *)
+  }
+
+  val stream : ?tracked:ID_set.t -> ?reported:ID_set.t -> ?ranges:time_range list -> Vcd_ast.event Seq.t -> event Seq.t
+  (** Build a stateful sequence from a simulation event stream.
+
+      Produces one {!event} per timestep where [event.changes] is non-empty. Signal state is always tracked regardless
+      of all filters; only emission is gated.
+
+      @param tracked IDs to maintain in [event.state]; defaults to all IDs.
+      @param reported IDs to surface in [event.changes]; defaults to all IDs.
+      @param ranges
+        Time intervals to emit events for; defaults to all time. Multiple ranges form a union. The sequence terminates
+        once the current timestamp exceeds all [stop] bounds. At the first timestep of each range interval,
+        [event.changes] is a full snapshot of all [reported] IDs in the current state (not just the delta), so that
+        consumers know the current value of any signal that changed while the stream was outside the range. *)
+end
+
 val string_of_scope_type : Vcd_ast.scope_type -> string
 val string_of_var_type : Vcd_ast.var_type -> string

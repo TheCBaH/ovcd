@@ -107,6 +107,78 @@ type time_range = {
 }
 
 (* ------------------------------------------------------------------ *)
+(*  Stateful stream                                                    *)
+(* ------------------------------------------------------------------ *)
+
+module Stateful = struct
+  module State = Map.Make (Vcd_types.ID)
+  module ID_set = Set.Make (Vcd_types.ID)
+
+  type state = Vcd_types.Value.t State.t
+
+  let find state id = State.find_opt id state
+
+  type event = { state : state; time : Vcd_types.Timestamp.t; changes : state }
+
+  let in_ranges ranges t =
+    match ranges with
+    | [] -> true
+    | _ ->
+        List.exists
+          (fun r ->
+            (match r.start with None -> true | Some s -> Vcd_types.Timestamp.compare t s >= 0)
+            && match r.stop with None -> true | Some e -> Vcd_types.Timestamp.compare t e <= 0)
+          ranges
+
+  let past_all_ranges ranges t =
+    match ranges with
+    | [] -> false
+    | _ ->
+        List.for_all (fun r -> match r.stop with None -> false | Some e -> Vcd_types.Timestamp.compare t e > 0) ranges
+
+  let stream ?tracked ?reported ?(ranges : time_range list = []) events =
+    let is_tracked id = match tracked with None -> true | Some s -> ID_set.mem id s in
+    let is_reported id = match reported with None -> true | Some s -> ID_set.mem id s in
+    let rec collect in_dump state filtered events =
+      match events () with
+      | Seq.Nil -> (state, filtered, `Nil)
+      | Seq.Cons (Vcd_ast.Timestamp t, rest) -> (state, filtered, `Timestamp (t, rest))
+      | Seq.Cons (Vcd_ast.DumpStart _, rest) -> collect true state filtered rest
+      | Seq.Cons (Vcd_ast.DumpEnd, rest) -> collect false state filtered rest
+      | Seq.Cons (Vcd_ast.Change (id, v), rest) ->
+          let new_state = if is_tracked id then State.add id v state else state in
+          let new_filtered = if (not in_dump) && is_reported id then State.add id v filtered else filtered in
+          collect in_dump new_state new_filtered rest
+      | Seq.Cons (_, rest) -> collect in_dump state filtered rest
+    in
+    (* [was_in_range] = whether the previous timestep was inside any range.
+       When transitioning from outside to inside (and ranges were specified),
+       we emit a snapshot of the full reported state so the consumer can see
+       values that changed while the stream was outside the range. *)
+    let rec loop was_in_range state t events () =
+      if past_all_ranges ranges t then Seq.Nil
+      else
+        let new_state, filtered, term = collect false state State.empty events in
+        let in_range = in_ranges ranges t in
+        let effective_changes =
+          if in_range && (not was_in_range) && ranges <> [] then State.filter (fun id _ -> is_reported id) new_state
+          else filtered
+        in
+        let emit = in_range && not (State.is_empty effective_changes) in
+        match term with
+        | `Nil ->
+            if emit then Seq.Cons ({ state; time = t; changes = effective_changes }, Fun.const Seq.Nil) else Seq.Nil
+        | `Timestamp (next_t, remaining) ->
+            if emit then
+              Seq.Cons ({ state; time = t; changes = effective_changes }, loop in_range new_state next_t remaining)
+            else loop in_range new_state next_t remaining ()
+    in
+    match collect false State.empty State.empty events with
+    | _, _, `Nil -> Fun.const Seq.Nil
+    | pre_state, _, `Timestamp (first_t, first_events) -> loop false pre_state first_t first_events
+end
+
+(* ------------------------------------------------------------------ *)
 (*  Pretty-printing helpers                                            *)
 (* ------------------------------------------------------------------ *)
 

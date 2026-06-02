@@ -1,4 +1,4 @@
-module ID_set = Set.Make (Vcd_types.ID)
+module ID_set = Vcd.Stateful.ID_set
 module Ref_map = Map.Make (Vcd_types.Reference)
 
 let build_filter resolver patterns regexes =

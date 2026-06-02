@@ -1,5 +1,5 @@
-module ID_set : Set.S with type elt = Vcd_types.ID.t
-(** Signal ID set. *)
+module ID_set = Vcd.Stateful.ID_set
+(** Signal ID set; alias of [Vcd.Stateful.ID_set] so types unify when passing filter sets to [Stateful.stream]. *)
 
 val build_filter : Vcd.Resolver.t -> (string * Filter_ast.pattern) list -> (string * Re.re) list -> ID_set.t option
 (** Build a signal-ID set from DSL patterns and compiled PCRE regexes. Returns [None] when both lists are empty (meaning
