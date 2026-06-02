@@ -63,19 +63,27 @@ module Value = struct
   let to_string = function
     | Scalar l -> String.make 1 (char_of_logic l)
     | Int n ->
-        (* width unknown here; emit the minimal binary representation *)
-        let rec to_bin acc n =
-          if n = 0 then if acc = "" then "0" else acc
-          else to_bin (String.make 1 (if n land 1 = 1 then '1' else '0') ^ acc) (n lsr 1)
+        let buf = Buffer.create 26 in
+        Buffer.add_char buf 'b';
+        let rec go n =
+          if n > 0 then begin
+            go (n lsr 1);
+            Buffer.add_char buf (if n land 1 = 1 then '1' else '0')
+          end
         in
-        "b" ^ to_bin "" n
+        if n = 0 then Buffer.add_char buf '0' else go n;
+        Buffer.contents buf
     | Int64 n ->
-        let rec to_bin acc n =
-          if Int64.equal n 0L then if acc = "" then "0" else acc
-          else
-            to_bin (String.make 1 (if Int64.logand n 1L = 1L then '1' else '0') ^ acc) (Int64.shift_right_logical n 1)
+        let buf = Buffer.create 66 in
+        Buffer.add_char buf 'b';
+        let rec go n =
+          if n > Int64.zero then begin
+            go (Int64.shift_right_logical n 1);
+            Buffer.add_char buf (if Int64.logand n 1L = 1L then '1' else '0')
+          end
         in
-        "b" ^ to_bin "" n
+        if n = Int64.zero then Buffer.add_char buf '0' else go n;
+        Buffer.contents buf
     | Bytes b ->
         let nbits = Bytes.length b * 8 in
         let buf = Buffer.create (nbits + 1) in
