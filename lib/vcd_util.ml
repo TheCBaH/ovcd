@@ -112,8 +112,7 @@ let parse_range s : Vcd.time_range =
     | None ->
         let t = Option.get (ts_of s) in
         Vcd.{ start = Some t; stop = Some t }
-    | Some i ->
-        Vcd.{ start = ts_of (String.sub s 0 i); stop = ts_of (String.sub s (i + 1) (String.length s - i - 1)) }
+    | Some i -> Vcd.{ start = ts_of (String.sub s 0 i); stop = ts_of (String.sub s (i + 1) (String.length s - i - 1)) }
 
 let in_ranges ranges t =
   match ranges with

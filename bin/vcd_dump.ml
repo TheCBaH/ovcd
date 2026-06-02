@@ -133,31 +133,31 @@ let () =
                 Format.printf "#%a\n" Vcd_types.Timestamp.pp t;
                 pending_ts := None
           in
-          (try
-             Seq.iter
-               (function
-                 | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
-                 | Timestamp t ->
-                     let in_r = Vcd_util.in_ranges ranges t in
-                     cur_in_range := in_r;
-                     pending_ts := if in_r then Some t else None
-                 | Change (id, v) when !cur_in_range && show_id filter id ->
-                     flush ();
-                     let name, size = resolve id in
-                     Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)
-                 | Change _ -> ()
-                 | DumpStart k when !cur_in_range ->
-                     flush ();
-                     Format.printf "$%s\n" k
-                 | DumpStart _ -> ()
-                 | DumpEnd when !cur_in_range -> Format.printf "$end\n"
-                 | DumpEnd -> ()
-                 | SimComment c when !cur_in_range ->
-                     flush ();
-                     Format.printf "//%s\n" c
-                 | SimComment _ -> ())
-               result.simulation
-           with Exit -> ())
+          try
+            Seq.iter
+              (function
+                | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
+                | Timestamp t ->
+                    let in_r = Vcd_util.in_ranges ranges t in
+                    cur_in_range := in_r;
+                    pending_ts := if in_r then Some t else None
+                | Change (id, v) when !cur_in_range && show_id filter id ->
+                    flush ();
+                    let name, size = resolve id in
+                    Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)
+                | Change _ -> ()
+                | DumpStart k when !cur_in_range ->
+                    flush ();
+                    Format.printf "$%s\n" k
+                | DumpStart _ -> ()
+                | DumpEnd when !cur_in_range -> Format.printf "$end\n"
+                | DumpEnd -> ()
+                | SimComment c when !cur_in_range ->
+                    flush ();
+                    Format.printf "//%s\n" c
+                | SimComment _ -> ())
+              result.simulation
+          with Exit -> ()
         end
         else begin
           Printf.printf "file:      %s\n" (Filename.basename path);

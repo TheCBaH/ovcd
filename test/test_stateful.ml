@@ -261,8 +261,7 @@ let%expect_test "multiple ranges — snapshot at each range entry" =
      t=1: delta within range 1.
      t=2: outside all ranges; state still updated internally.
      t=3: entry of range 2 → snapshot of full state (reflecting t=2 changes). *)
-  Seq.iter pp_event
-    (stream ~ranges:[ range ~stop:(ts "1") (); range ~start:(ts "3") () ] (stream_of counter_vcd));
+  Seq.iter pp_event (stream ~ranges:[ range ~stop:(ts "1") (); range ~start:(ts "3") () ] (stream_of counter_vcd));
   [%expect
     {|
     t=0

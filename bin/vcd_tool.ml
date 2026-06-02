@@ -55,7 +55,9 @@ let () =
       ("--strip", Arg.Set strip, " Strip the longest common scope prefix from signal names");
     ]
   in
-  let usage = "usage: vcd_tool [--range SPEC]... [--signal PATTERN]... [--signal-re REGEX]... [--strip] <file.vcd>..." in
+  let usage =
+    "usage: vcd_tool [--range SPEC]... [--signal PATTERN]... [--signal-re REGEX]... [--strip] <file.vcd>..."
+  in
   Arg.parse spec (fun f -> files := f :: !files) usage;
   let files = List.rev !files in
   let ranges = List.rev !ranges in
