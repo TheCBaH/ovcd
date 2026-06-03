@@ -63,7 +63,7 @@ let parse_vector s =
   let open Value in
   let len = String.length s in
   if String.for_all (fun c -> c = '0' || c = '1') s then
-    if len <= 24 then Int (String.fold_left (fun acc c -> (acc lsl 1) lor (Char.code c - Char.code '0')) 0 s)
+    if len <= int_bits then Int (String.fold_left (fun acc c -> (acc lsl 1) lor (Char.code c - Char.code '0')) 0 s)
     else if len <= 64 then
       Int64
         (String.fold_left (fun acc c -> Int64.logor (Int64.shift_left acc 1) (Int64.of_int (Char.code c land 1))) 0L s)

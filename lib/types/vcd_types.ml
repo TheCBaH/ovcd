@@ -47,12 +47,15 @@ module Value = struct
     | 'z' | 'Z' -> Z
     | c -> raise (InvalidLogicChar c)
 
+  (** Maximum bit-width stored as a native [int] in the [Int] variant. *)
+  let int_bits = 24
+
   (** Decoded value for a bus/vector signal. *)
   type t =
     | Scalar of logic  (** Single-bit 4-state value. *)
     | Int of int
-        (** All-0/1 vector that fits in a portable OCaml [int] (<= 24 bits). Canonical bit width is in {!var_decl.size}.
-        *)
+        (** All-0/1 vector that fits in a portable OCaml [int] (<= [int_bits] = 24 bits). Canonical bit width is in
+            {!var_decl.size}. *)
     | Int64 of int64
         (** All-0/1 vector of 25..64 bits, held as an [int64]. Canonical bit width is in {!var_decl.size}. *)
     | Bytes of bytes  (** All-0/1 vector wider than 64 bits, packed MSB-first into [bytes]. *)

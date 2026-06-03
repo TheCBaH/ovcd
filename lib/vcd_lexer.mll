@@ -197,7 +197,7 @@ and next_event = parse
   | bin_pfx (digit_01 digit_01+ as bits) white+ (word as id)
       { let n = String.length bits in
         let value =
-          if n <= 24 then
+          if n <= Vcd_types.Value.int_bits then
             Vcd_types.Value.int
               (String.fold_left
                  (fun acc c -> (acc lsl 1) lor (Char.code c - 48)) 0 bits)
