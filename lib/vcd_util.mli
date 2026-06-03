@@ -1,5 +1,9 @@
-module ID_set = Vcd.Stateful.ID_set
-(** Signal ID set; alias of [Vcd.Stateful.ID_set] so types unify when passing filter sets to [Stateful.stream]. *)
+[@@@ai_disclosure "ai-assisted"]
+[@@@ai_model "claude-sonnet-4-6"]
+[@@@ai_provider "Anthropic"]
+
+module ID_set = Vcd.ID_set
+(** Signal ID set; alias of [Vcd.ID_set] so types unify when passing filter sets to [Stateful.stream]. *)
 
 type filter
 (** Maps each matched [ID.t] to the specific subset of its [Reference.t] aliases that were selected by the user's
@@ -15,7 +19,7 @@ val filter_ids : filter -> ID_set.t
 val mem_filter : filter option -> Vcd_types.ID.t -> bool
 (** [true] when [filter = None] (all signals pass) or the ID is present in the filter. *)
 
-val selected_refs : Vcd.Resolver.t -> filter option -> Vcd_types.ID.t -> Vcd.Resolver.Ref_set.t
+val selected_refs : Vcd.Resolver.t -> filter option -> Vcd_types.ID.t -> Vcd.Ref_set.t
 (** The references to print for [id] given [filter]. [None] → all references from the resolver. [Some f] → only the
     subset of references that were explicitly selected for this ID. *)
 

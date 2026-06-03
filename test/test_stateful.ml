@@ -5,7 +5,7 @@ open Vcd.Stateful
 (*  Helpers                                                             *)
 (* ------------------------------------------------------------------ *)
 
-let pp_map m = State.iter (fun id v -> Format.printf " %a=%a" ID.pp id Value.pp v) m
+let pp_map m = Vcd.ID_map.iter (fun id v -> Format.printf " %a=%a" ID.pp id Value.pp v) m
 
 let pp_event ev =
   Format.printf "t=%a\n" Timestamp.pp ev.time;
@@ -16,7 +16,7 @@ let pp_event ev =
   Format.printf "\n"
 
 let stream_of vcd = (Vcd.parse_string vcd).simulation
-let id_set strs = List.fold_left (fun s str -> ID_set.add (ID.of_string str) s) ID_set.empty strs
+let id_set strs = List.fold_left (fun s str -> Vcd.ID_set.add (ID.of_string str) s) Vcd.ID_set.empty strs
 let ts s = Timestamp.of_string s
 let range ?start ?stop () : Vcd.time_range = { start; stop }
 

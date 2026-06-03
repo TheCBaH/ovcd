@@ -273,8 +273,8 @@ let%expect_test "Resolver — references by ID" =
     (fun id ->
       let id_t = ID.of_string id in
       let refs = Vcd.Resolver.references resolver id_t in
-      if Vcd.Resolver.Ref_set.is_empty refs then Printf.printf "%s -> (not found)\n" id
-      else Vcd.Resolver.Ref_set.iter (fun r -> Printf.printf "%s -> %s\n" id (Reference.to_string r)) refs)
+      if Vcd.Ref_set.is_empty refs then Printf.printf "%s -> (not found)\n" id
+      else Vcd.Ref_set.iter (fun r -> Printf.printf "%s -> %s\n" id (Reference.to_string r)) refs)
     [ "!"; "\""; "#" ];
   [%expect {|
     ! -> tb.clk
@@ -289,7 +289,7 @@ let%expect_test "Resolver — entry_id and entry_references" =
   | None -> Printf.printf "(not found)\n"
   | Some e ->
       let open Vcd.Resolver in
-      let refs = Ref_set.elements (entry_references e) in
+      let refs = Vcd.Ref_set.elements (entry_references e) in
       Printf.printf "id=%s references=%s\n"
         (ID.to_string (entry_id e))
         (String.concat "," (List.map Reference.to_string refs)));
@@ -301,8 +301,8 @@ let%expect_test "Resolver — aliased ID has multiple references" =
   List.iter
     (fun id ->
       let refs = Vcd.Resolver.references resolver (ID.of_string id) in
-      Printf.printf "%s (%d refs):" id (Vcd.Resolver.Ref_set.cardinal refs);
-      Vcd.Resolver.Ref_set.iter (fun r -> Printf.printf " %s" (Reference.to_string r)) refs;
+      Printf.printf "%s (%d refs):" id (Vcd.Ref_set.cardinal refs);
+      Vcd.Ref_set.iter (fun r -> Printf.printf " %s" (Reference.to_string r)) refs;
       print_char '\n')
     [ "!"; "\""; "#"; "$"; "%" ];
   [%expect

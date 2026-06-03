@@ -122,7 +122,7 @@ let () =
             | Some entry ->
                 let size = Vcd.Resolver.entry_size entry in
                 let names =
-                  Vcd.Resolver.Ref_set.fold
+                  Vcd.Ref_set.fold
                     (fun r acc ->
                       let display = match strip_map with None -> r | Some f -> f r in
                       Vcd_types.Reference.to_string display :: acc)

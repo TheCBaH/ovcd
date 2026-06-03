@@ -1,3 +1,7 @@
+[@@@ai_disclosure "ai-assisted"]
+[@@@ai_model "claude-sonnet-4-6"]
+[@@@ai_provider "Anthropic"]
+
 (** High-level API for the VCD parser.
 
     Usage:
@@ -25,10 +29,19 @@ val parse_file : string -> parse_result
 (** Parse a VCD file by path. The simulation [Seq.t] is lazy; the file handle is left open until the sequence is fully
     consumed or the caller discards it. *)
 
-module Resolver : sig
-  module Ref_set : Set.S with type elt = Vcd_types.Reference.t
-  (** Set of hierarchical signal references; used to represent all aliases of a single ID. *)
+module ID_map : Map.S with type key = Vcd_types.ID.t
+(** Map keyed on signal identifiers. *)
 
+module ID_set : Set.S with type elt = Vcd_types.ID.t
+(** Set of signal identifiers. *)
+
+module Ref_map : Map.S with type key = Vcd_types.Reference.t
+(** Map keyed on hierarchical signal references. *)
+
+module Ref_set : Set.S with type elt = Vcd_types.Reference.t
+(** Set of hierarchical signal references. *)
+
+module Resolver : sig
   type entry
   (** Opaque per-signal record. One entry per unique ID; may carry multiple [Reference.t] aliases. *)
 
@@ -70,12 +83,8 @@ val past_all_ranges : time_range list -> Vcd_types.Timestamp.t -> bool
     empty or any range has no [stop]. *)
 
 module Stateful : sig
-  module State : Map.S with type key = Vcd_types.ID.t
+  type state = Vcd_types.Value.t ID_map.t
   (** Map from [ID.t] to [Value.t], used for both full signal state and per-step changes. *)
-
-  module ID_set : Set.S with type elt = Vcd_types.ID.t
-
-  type state = Vcd_types.Value.t State.t
 
   val find : state -> Vcd_types.ID.t -> Vcd_types.Value.t option
   (** [find state id] returns the current value of [id] in [state], or [None] if unseen. *)

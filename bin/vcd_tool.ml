@@ -1,13 +1,13 @@
 module Stateful = Vcd.Stateful
 
 let pp_changes resolver strip_map filter ev =
-  Stateful.State.iter
+  Vcd.ID_map.iter
     (fun id v ->
       match Vcd.Resolver.find resolver id with
       | None -> ()
       | Some entry ->
           let size = Vcd.Resolver.entry_size entry in
-          Vcd.Resolver.Ref_set.iter
+          Vcd.Ref_set.iter
             (fun r ->
               let display = match strip_map with None -> r | Some f -> f r in
               Format.printf "  %s=%s\n" (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))

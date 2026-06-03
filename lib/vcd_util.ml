@@ -1,11 +1,15 @@
-module ID_set = Vcd.Stateful.ID_set
-module ID_map = Map.Make (Vcd_types.ID)
-module Ref_map = Map.Make (Vcd_types.Reference)
+[@@@ai_disclosure "ai-assisted"]
+[@@@ai_model "claude-sonnet-4-6"]
+[@@@ai_provider "Anthropic"]
+
+module ID_set = Vcd.ID_set
+module ID_map = Vcd.ID_map
+module Ref_map = Vcd.Ref_map
 
 (* Map from each matched ID to the specific subset of its references that
    the user's patterns selected. Kept separate from ID_set so display code
    can avoid printing unselected aliases of a matched ID. *)
-type filter = Vcd.Resolver.Ref_set.t ID_map.t
+type filter = Vcd.Ref_set.t ID_map.t
 
 let ref_matches_any patterns regexes r =
   List.exists (fun (_, pat) -> Filter_matcher.matches pat r) patterns
@@ -21,14 +25,13 @@ let build_filter resolver patterns regexes =
       Vcd.Resolver.fold
         (fun entry acc ->
           let matched_refs =
-            Vcd.Resolver.Ref_set.filter (ref_matches_any patterns regexes) (Vcd.Resolver.entry_references entry)
+            Vcd.Ref_set.filter (ref_matches_any patterns regexes) (Vcd.Resolver.entry_references entry)
           in
-          if Vcd.Resolver.Ref_set.is_empty matched_refs then acc
-          else ID_map.add (Vcd.Resolver.entry_id entry) matched_refs acc)
+          if Vcd.Ref_set.is_empty matched_refs then acc else ID_map.add (Vcd.Resolver.entry_id entry) matched_refs acc)
         resolver ID_map.empty
     in
     let any_ref_matches f =
-      Vcd.Resolver.fold (fun e b -> b || Vcd.Resolver.Ref_set.exists f (Vcd.Resolver.entry_references e)) resolver false
+      Vcd.Resolver.fold (fun e b -> b || Vcd.Ref_set.exists f (Vcd.Resolver.entry_references e)) resolver false
     in
     List.iter
       (fun (s, pat) ->
@@ -49,16 +52,16 @@ let mem_filter filter id = match filter with None -> true | Some m -> ID_map.mem
 let selected_refs resolver filter id =
   match filter with
   | None -> Vcd.Resolver.references resolver id
-  | Some m -> Option.value ~default:Vcd.Resolver.Ref_set.empty (ID_map.find_opt id m)
+  | Some m -> Option.value ~default:Vcd.Ref_set.empty (ID_map.find_opt id m)
 
 let build_strip_map resolver filter =
   let matched =
     match filter with
     | None ->
         Vcd.Resolver.fold
-          (fun entry acc -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) (Vcd.Resolver.entry_references entry) acc)
+          (fun entry acc -> Vcd.Ref_set.fold (fun r a -> r :: a) (Vcd.Resolver.entry_references entry) acc)
           resolver []
-    | Some m -> ID_map.fold (fun _ refs acc -> Vcd.Resolver.Ref_set.fold (fun r a -> r :: a) refs acc) m []
+    | Some m -> ID_map.fold (fun _ refs acc -> Vcd.Ref_set.fold (fun r a -> r :: a) refs acc) m []
   in
   let rec common2 = function x :: xs, y :: ys when String.equal x y -> x :: common2 (xs, ys) | _ -> [] in
   let lists = List.rev_map Vcd_types.Reference.to_list matched in

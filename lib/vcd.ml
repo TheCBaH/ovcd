@@ -1,3 +1,7 @@
+[@@@ai_disclosure "ai-assisted"]
+[@@@ai_model "claude-sonnet-4-6"]
+[@@@ai_provider "Anthropic"]
+
 exception Parse_error of string
 
 type parse_result = {
@@ -55,18 +59,21 @@ let parse_file path =
   parse_lexbuf lexbuf
 
 (* ------------------------------------------------------------------ *)
+(*  Shared key-indexed containers                                     *)
+(* ------------------------------------------------------------------ *)
+
+module ID_map = Map.Make (Vcd_types.ID)
+module ID_set = Set.Make (Vcd_types.ID)
+module Ref_map = Map.Make (Vcd_types.Reference)
+module Ref_set = Set.Make (Vcd_types.Reference)
+
+(* ------------------------------------------------------------------ *)
 (*  ID → variable resolver                                            *)
 (* ------------------------------------------------------------------ *)
 
 module Resolver = struct
-  module Ref_set = Set.Make (Vcd_types.Reference)
-
   type entry = { id : Vcd_types.ID.t; size : int; references : Ref_set.t }
-
-  module By_id = Map.Make (Vcd_types.ID)
-  module By_ref = Map.Make (Vcd_types.Reference)
-
-  type t = { by_id : entry By_id.t; by_ref : Vcd_types.ID.t By_ref.t }
+  type t = { by_id : entry ID_map.t; by_ref : Vcd_types.ID.t Ref_map.t }
 
   let make header =
     let open Vcd_ast in
@@ -77,11 +84,11 @@ module Resolver = struct
           (fun (by_id, by_ref) var ->
             let r = push var.ref path in
             let entry =
-              match By_id.find_opt var.id by_id with
+              match ID_map.find_opt var.id by_id with
               | None -> { id = var.id; size = var.size; references = Ref_set.singleton r }
               | Some e -> { e with references = Ref_set.add r e.references }
             in
-            (By_id.add var.id entry by_id, By_ref.add r var.id by_ref))
+            (ID_map.add var.id entry by_id, Ref_map.add r var.id by_ref))
           (by_id, by_ref) vars
       in
       List.fold_left
@@ -91,17 +98,17 @@ module Resolver = struct
     let by_id, by_ref =
       List.fold_left
         (fun acc scope -> collect (push scope.s_name empty) scope.vars scope.children acc)
-        (By_id.empty, By_ref.empty) header.scopes
+        (ID_map.empty, Ref_map.empty) header.scopes
     in
     { by_id; by_ref }
 
   let entry_id e = e.id
   let entry_size e = e.size
   let entry_references e = e.references
-  let find t id = By_id.find_opt id t.by_id
-  let references t id = match By_id.find_opt id t.by_id with None -> Ref_set.empty | Some e -> e.references
-  let find_id t ref = By_ref.find_opt ref t.by_ref
-  let fold f t acc = By_id.fold (fun _ e a -> f e a) t.by_id acc
+  let find t id = ID_map.find_opt id t.by_id
+  let references t id = match ID_map.find_opt id t.by_id with None -> Ref_set.empty | Some e -> e.references
+  let find_id t ref = Ref_map.find_opt ref t.by_ref
+  let fold f t acc = ID_map.fold (fun _ e a -> f e a) t.by_id acc
 end
 
 (* ------------------------------------------------------------------ *)
@@ -138,12 +145,9 @@ let past_all_ranges ranges t =
 (* ------------------------------------------------------------------ *)
 
 module Stateful = struct
-  module State = Map.Make (Vcd_types.ID)
-  module ID_set = Set.Make (Vcd_types.ID)
+  type state = Vcd_types.Value.t ID_map.t
 
-  type state = Vcd_types.Value.t State.t
-
-  let find state id = State.find_opt id state
+  let find state id = ID_map.find_opt id state
 
   type event = { state : state; time : Vcd_types.Timestamp.t; changes : state }
 
@@ -157,8 +161,8 @@ module Stateful = struct
       | Seq.Cons (Vcd_ast.DumpStart _, rest) -> collect true state filtered rest
       | Seq.Cons (Vcd_ast.DumpEnd, rest) -> collect false state filtered rest
       | Seq.Cons (Vcd_ast.Change (id, v), rest) ->
-          let new_state = if is_tracked id then State.add id v state else state in
-          let new_filtered = if (not in_dump) && is_reported id then State.add id v filtered else filtered in
+          let new_state = if is_tracked id then ID_map.add id v state else state in
+          let new_filtered = if (not in_dump) && is_reported id then ID_map.add id v filtered else filtered in
           collect in_dump new_state new_filtered rest
       | Seq.Cons (_, rest) -> collect in_dump state filtered rest
     in
@@ -169,13 +173,13 @@ module Stateful = struct
     let rec loop was_in_range state t events () =
       if past_all_ranges ranges t then Seq.Nil
       else
-        let new_state, filtered, term = collect false state State.empty events in
+        let new_state, filtered, term = collect false state ID_map.empty events in
         let in_range = in_ranges ranges t in
         let effective_changes =
-          if in_range && (not was_in_range) && ranges <> [] then State.filter (fun id _ -> is_reported id) new_state
+          if in_range && (not was_in_range) && ranges <> [] then ID_map.filter (fun id _ -> is_reported id) new_state
           else filtered
         in
-        let emit = in_range && not (State.is_empty effective_changes) in
+        let emit = in_range && not (ID_map.is_empty effective_changes) in
         match term with
         | `Nil ->
             if emit then Seq.Cons ({ state; time = t; changes = effective_changes }, Fun.const Seq.Nil) else Seq.Nil
@@ -184,7 +188,7 @@ module Stateful = struct
               Seq.Cons ({ state; time = t; changes = effective_changes }, loop in_range new_state next_t remaining)
             else loop in_range new_state next_t remaining ()
     in
-    match collect false State.empty State.empty events with
+    match collect false ID_map.empty ID_map.empty events with
     | _, _, `Nil -> Fun.const Seq.Nil
     | pre_state, _, `Timestamp (first_t, first_events) -> loop false pre_state first_t first_events
 end
