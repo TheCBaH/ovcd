@@ -2,7 +2,7 @@
  (name vcd)
  (wrapped false)
  (modules vcd_ast vcd_lexer vcd_parser vcd)
- (libraries vcd_types)
+ (libraries vcd_types vcd_filter)
  (ocamlopt_flags
   (:standard -O3)))
 

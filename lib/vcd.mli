@@ -67,6 +67,9 @@ module Resolver : sig
 
   val fold : (entry -> 'a -> 'a) -> t -> 'a -> 'a
   (** Fold over all entries in declaration order. *)
+
+  val find_all : Filter_ast.pattern -> t -> entry list
+  (** [find_all pat t] returns all entries that have at least one reference matched by [pat]. Order is unspecified. *)
 end
 
 type time_range = {

@@ -109,6 +109,11 @@ module Resolver = struct
   let references t id = match ID_map.find_opt id t.by_id with None -> Ref_set.empty | Some e -> e.references
   let find_id t ref = Ref_map.find_opt ref t.by_ref
   let fold f t acc = ID_map.fold (fun _ e a -> f e a) t.by_id acc
+
+  let find_all pat t =
+    ID_map.fold
+      (fun _ e acc -> if Ref_set.exists (Filter_matcher.matches pat) e.references then e :: acc else acc)
+      t.by_id []
 end
 
 (* ------------------------------------------------------------------ *)

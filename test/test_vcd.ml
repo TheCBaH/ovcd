@@ -329,3 +329,26 @@ let%expect_test "Resolver — find_id reverse lookup" =
     tb.sub.data -> "
     tb.unknown -> (not found)
   |}]
+
+let%expect_test "Resolver — find_all" =
+  (* counter_vcd has aliased IDs (same ID declared in two scopes).
+     find_all returns an entry when ANY of its references match, so a pattern
+     that matches only counter_tb.clock still returns the aliased entry whose
+     second reference is counter_tb.top.clock. *)
+  let r = Vcd.parse_string counter_vcd in
+  let resolver = Vcd.Resolver.make r.header in
+  let pat s = Result.get_ok (Filter_parser.parse s) in
+  let show p =
+    let entries = Vcd.Resolver.find_all (pat p) resolver in
+    Printf.printf "%S -> [%s]\n" p
+      (String.concat "; " (List.map (fun e -> ID.to_string (Vcd.Resolver.entry_id e)) entries))
+  in
+  show "counter_tb.clock";
+  show "counter_tb.*";
+  show "**.out";
+  show "nope.nope";
+  [%expect {|
+    "counter_tb.clock" -> ["]
+    "counter_tb.*" -> [$; #; "; !]
+    "**.out" -> [%; !]
+    "nope.nope" -> [] |}]
