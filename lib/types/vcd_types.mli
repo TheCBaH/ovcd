@@ -82,4 +82,31 @@ module Value : sig
   (** [int64 n] returns [Int (Int64.to_int n)] when [n] fits in a native [int], otherwise [Int64 n]. *)
 
   val bytes : bytes -> t
+
+  val get_int_exn : t -> int
+  (** [get_int_exn v] returns the full integer value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
+      wider than a native [int], is a [Real], or is an [Other] value. *)
+
+  val get_int64_exn : t -> int64
+  (** [get_int64_exn v] returns the full [int64] value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
+      wider than 64 bits ([Bytes]), is a [Real], or is an [Other] value. *)
+
+  val get_byte_exn : t -> int -> int
+  (** [get_byte_exn v byte_idx] returns the byte covering bits [byte_idx*8+7 : byte_idx*8] (LSB = bit 0) as an integer
+      in 0..255. Returns 0 for [byte_idx] beyond the payload width (zero-fill). Raises [Invalid_argument] for X/Z,
+      [Real], or [Other] values, and for negative [byte_idx]. *)
+
+  val get_bits_exn : t -> lo:int -> hi:int -> int
+  (** [get_bits_exn v ~lo ~hi] extracts bits [[hi:lo]] (LSB = bit 0, inclusive) as an unsigned [int]. Bits beyond the
+      payload width are zero-filled. Raises [Invalid_argument] if the range is invalid, wider than [int_bits] bits, or
+      the value contains X/Z bits, is a [Real], or is an [Other] value. *)
+
+  val get_bits64_exn : t -> lo:int -> hi:int -> int64
+  (** [get_bits64_exn v ~lo ~hi] extracts bits [[hi:lo]] (LSB = bit 0, inclusive) as an unsigned [int64]. Bits beyond
+      the payload width are zero-filled. Raises [Invalid_argument] if the range is invalid, wider than 64 bits, or the
+      value contains X/Z bits, is a [Real], or is an [Other] value. *)
 end
+
+[@@@ai_disclosure "ai-assisted"]
+[@@@ai_model "claude-sonnet-4-6"]
+[@@@ai_provider "Anthropic"]

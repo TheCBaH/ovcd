@@ -135,4 +135,87 @@ module Value = struct
   let int64 n = if n >= Int64.zero && n <= Int64.of_int max_int then int (Int64.to_int n) else Int64 n
   let bytes b = Bytes b
   let pp fmt v = Format.pp_print_string fmt (to_string v)
+
+  let get_int_exn = function
+    | Scalar B0 -> 0
+    | Scalar B1 -> 1
+    | Scalar (X | Z) -> invalid_arg "Value.get_int_exn: X/Z value"
+    | Int n -> n
+    | Int64 n ->
+        if n >= 0L && n <= Int64.of_int max_int then Int64.to_int n
+        else invalid_arg "Value.get_int_exn: value out of int range"
+    | Bytes _ -> invalid_arg "Value.get_int_exn: value too wide for int"
+    | Scalars _ -> invalid_arg "Value.get_int_exn: X/Z value"
+    | Other _ -> invalid_arg "Value.get_int_exn: 9-state or unrecognised value"
+    | Real _ -> invalid_arg "Value.get_int_exn: real value"
+  [@@ai_disclosure "ai-generated"]
+
+  let get_int64_exn = function
+    | Scalar B0 -> 0L
+    | Scalar B1 -> 1L
+    | Scalar (X | Z) -> invalid_arg "Value.get_int64_exn: X/Z value"
+    | Int n -> Int64.of_int n
+    | Int64 n -> n
+    | Bytes _ -> invalid_arg "Value.get_int64_exn: value too wide for int64"
+    | Scalars _ -> invalid_arg "Value.get_int64_exn: X/Z value"
+    | Other _ -> invalid_arg "Value.get_int64_exn: 9-state or unrecognised value"
+    | Real _ -> invalid_arg "Value.get_int64_exn: real value"
+  [@@ai_disclosure "ai-generated"]
+
+  (* Returns the byte covering bits [byte_idx*8+7 : byte_idx*8] (LSB = bit 0).
+     Zero-fills bytes beyond the payload width. Raises on X/Z/Real/Other. *)
+  let get_byte_exn v byte_idx =
+    if byte_idx < 0 then invalid_arg "Value.get_byte_exn: negative offset";
+    match v with
+    | Scalar B0 -> 0
+    | Scalar B1 -> if byte_idx = 0 then 1 else 0
+    | Scalar (X | Z) -> invalid_arg "Value.get_byte_exn: X/Z value"
+    | Int n ->
+        let shift = byte_idx * 8 in
+        if shift >= Sys.int_size then 0 else (n lsr shift) land 0xFF
+    | Int64 n ->
+        let shift = byte_idx * 8 in
+        if shift >= 64 then 0 else Int64.to_int (Int64.logand (Int64.shift_right_logical n shift) 0xFFL)
+    | Bytes b ->
+        let rev_idx = Bytes.length b - 1 - byte_idx in
+        if rev_idx < 0 then 0 else Char.code (Bytes.get b rev_idx)
+    | Scalars _ -> invalid_arg "Value.get_byte_exn: X/Z value"
+    | Other _ -> invalid_arg "Value.get_byte_exn: 9-state or unrecognised value"
+    | Real _ -> invalid_arg "Value.get_byte_exn: real value"
+  [@@ai_disclosure "ai-generated"]
+
+  let get_bits_exn v ~lo ~hi =
+    if lo < 0 || hi < lo then invalid_arg "Value.get_bits_exn: invalid range";
+    let width = hi - lo + 1 in
+    if width > int_bits then invalid_arg "Value.get_bits_exn: range too wide for int";
+    let rec go acc byte_idx =
+      if byte_idx > hi / 8 then acc
+      else
+        let byte = get_byte_exn v byte_idx in
+        let shift = (byte_idx * 8) - lo in
+        let contrib = if shift >= 0 then byte lsl shift else byte lsr -shift in
+        go (acc lor contrib) (byte_idx + 1)
+    in
+    go 0 (lo / 8) land ((1 lsl width) - 1)
+  [@@ai_disclosure "ai-generated"]
+
+  let get_bits64_exn v ~lo ~hi =
+    if lo < 0 || hi < lo then invalid_arg "Value.get_bits64_exn: invalid range";
+    let width = hi - lo + 1 in
+    if width > 64 then invalid_arg "Value.get_bits64_exn: range too wide for int64";
+    let rec go acc byte_idx =
+      if byte_idx > hi / 8 then acc
+      else
+        let byte = Int64.of_int (get_byte_exn v byte_idx) in
+        let shift = (byte_idx * 8) - lo in
+        let contrib = if shift >= 0 then Int64.shift_left byte shift else Int64.shift_right_logical byte (-shift) in
+        go (Int64.logor acc contrib) (byte_idx + 1)
+    in
+    let mask = if width = 64 then Int64.minus_one else Int64.pred (Int64.shift_left 1L width) in
+    Int64.logand (go 0L (lo / 8)) mask
+  [@@ai_disclosure "ai-generated"]
 end
+
+[@@@ai_disclosure "ai-assisted"]
+[@@@ai_model "claude-sonnet-4-6"]
+[@@@ai_provider "Anthropic"]
