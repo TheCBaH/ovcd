@@ -1,4 +1,5 @@
 (library
  (name vcd_types)
+ (public_name ovcd.vcd_types)
  (wrapped false)
  (modules vcd_types))

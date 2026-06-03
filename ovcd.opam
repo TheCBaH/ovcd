@@ -1,0 +1,92 @@
+opam-version: "2.0"
+version: "0.1"
+synopsis: "VCD waveform file parser"
+description:
+  "A library and tools for parsing Value Change Dump (VCD) waveform files. Provides a streaming parser, a resolver for hierarchical signal names, and the vcd_dump and vcd_tool command-line utilities."
+maintainer: ["Vladimir Silyaev <thecbah@gmail.com>"]
+authors: ["Vladimir Silyaev"]
+license: "ISC"
+tags: ["vcd" "waveform" "parser" "simulation" "eda"]
+homepage: "https://github.com/TheCBaH/ovcd"
+doc: "https://github.com/TheCBaH/ovcd"
+bug-reports: "https://github.com/TheCBaH/ovcd/issues"
+depends: [
+  "dune" {>= "3.0"}
+  "ocaml" {>= "4.14"}
+  "menhir" {>= "20211230"}
+  "menhirLib" {>= "20211230"}
+  "re"
+  "ppx_expect" {with-test}
+  "ppx_inline_test" {with-test}
+  "odoc" {with-doc}
+]
+# Test-data archives: one per git submodule, pinned to the exact commit
+# recorded in .gitmodules.  Fetched by opam before the build; extracted
+# into test-data/ only when --with-test is requested.
+extra-source "test-data-vcdvcd.tar.gz" {
+  src:
+    "https://github.com/cirosantilli/vcdvcd/archive/515273543d74da21588785a2b192159c8ac7a66a.tar.gz"
+  checksum: [
+    "sha256=06e86a31c93317d1bad74a91630c57b616cc679668cd47c25e7ab8107131d513"
+  ]
+}
+extra-source "test-data-vcd-io.tar.gz" {
+  src:
+    "https://github.com/erihsu/vcd-io/archive/766b98dec0f581abbb9c93e1cc2913ac86607b1d.tar.gz"
+  checksum: [
+    "sha256=670436ef267ff5f0525c6379c66dcb7992d3c6ef9062057b4b2be97e3778ba11"
+  ]
+}
+extra-source "test-data-pyDigitalWaveTools.tar.gz" {
+  src:
+    "https://github.com/Nic30/pyDigitalWaveTools/archive/d848418b374b8e5b90abd5e23e54a6ad658e7e0b.tar.gz"
+  checksum: [
+    "sha256=6658fa006f488a9f2a540f8b0e4fc7af2a9ae7a6a925b17ae9548f76ceb33e8f"
+  ]
+}
+extra-source "test-data-go-vcd-parser.tar.gz" {
+  src:
+    "https://github.com/filmil/go-vcd-parser/archive/41e5baeadf3b2ef69311789ae19e2956eac9486c.tar.gz"
+  checksum: [
+    "sha256=b9de70f1a0b7824b0020f3cddfea6168a46c5d0b8cf8d67691a88cfd214e8776"
+  ]
+}
+extra-source "test-data-digital-vcd-parser.tar.gz" {
+  src:
+    "https://github.com/Digital-EDA/digital-vcd-parser/archive/cd74a089e47aef8c1dcd23798a872e2ca684a3df.tar.gz"
+  checksum: [
+    "sha256=a47cee34eb3fc2f5933a0b85fabd0c7dad3bd67ef2210dd5af8f3d4b535fc5ca"
+  ]
+}
+build: [
+  ["dune" "subst"] {dev}
+  # Extract test-data archives into the expected submodule locations.
+  ["mkdir" "-p"
+   "test-data/vcdvcd"
+   "test-data/vcd-io"
+   "test-data/pyDigitalWaveTools"
+   "test-data/go-vcd-parser"
+   "test-data/digital-vcd-parser"] {with-test}
+  ["tar" "-xzf" "test-data-vcdvcd.tar.gz"
+   "--strip-components=1" "-C" "test-data/vcdvcd"] {with-test}
+  ["tar" "-xzf" "test-data-vcd-io.tar.gz"
+   "--strip-components=1" "-C" "test-data/vcd-io"] {with-test}
+  ["tar" "-xzf" "test-data-pyDigitalWaveTools.tar.gz"
+   "--strip-components=1" "-C" "test-data/pyDigitalWaveTools"] {with-test}
+  ["tar" "-xzf" "test-data-go-vcd-parser.tar.gz"
+   "--strip-components=1" "-C" "test-data/go-vcd-parser"] {with-test}
+  ["tar" "-xzf" "test-data-digital-vcd-parser.tar.gz"
+   "--strip-components=1" "-C" "test-data/digital-vcd-parser"] {with-test}
+  [
+    "dune"
+    "build"
+    "-p"
+    name
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+dev-repo: "git+https://github.com/TheCBaH/ovcd.git"

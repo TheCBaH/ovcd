@@ -1,0 +1,13 @@
+lib: [
+  "_build/install/default/lib/ovcd/META"
+  "_build/install/default/lib/ovcd/dune-package"
+  "_build/install/default/lib/ovcd/opam"
+]
+bin: [
+  "_build/install/default/bin/vcd_dump"
+  "_build/install/default/bin/vcd_tool"
+]
+doc: [
+  "_build/install/default/doc/ovcd/LICENSE"
+  "_build/install/default/doc/ovcd/README.md"
+]

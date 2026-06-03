@@ -1,0 +1,81 @@
+name: opam pin install
+
+# Verifies the full install chain from the git ref under test without any
+# local source checkout — opam fetches the package directly from git throughout.
+#
+# Phase 1: install ovcd, verify vcd_tool/vcd_dump binaries, build and run the
+# consumer application from the source tree (sparse-checked-out) that uses
+# ovcd as an external library dependency.
+#
+# Phase 2: reinstall with --with-test.  ovcd.opam declares extra-source entries
+# for each test-data submodule (pinned to exact commit SHAs); opam fetches and
+# verifies them before the build, and the build: section extracts them into
+# test-data/ so the full cram and inline test suites run without a checkout.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  opam-pin:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # No full source checkout — opam fetches the package directly from git.
+      # For pull_request events github.sha is a synthetic merge commit that
+      # does not exist as a real push; use the actual PR head SHA instead.
+      - name: resolve git ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "repo=${{ github.event.pull_request.head.repo.full_name }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}"            >> "$GITHUB_OUTPUT"
+          else
+            echo "repo=${{ github.repository }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}"          >> "$GITHUB_OUTPUT"
+          fi
+
+      # Sparse-checkout only the .github/workflows/consumer/ subtree — the rest of the
+      # source tree is intentionally absent; ovcd itself comes from the opam pin.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.sha }}
+          repository: ${{ steps.ref.outputs.repo }}
+          sparse-checkout: .github/workflows/consumer
+          sparse-checkout-cone-mode: true
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "4.14"
+          opam-pin: false
+
+      - name: pin ovcd from git ref
+        run: |
+          opam pin add ovcd \
+            "git+https://github.com/${{ steps.ref.outputs.repo }}.git#${{ steps.ref.outputs.sha }}" \
+            --no-action -y
+
+      - name: install ovcd deps
+        run: opam install ovcd --deps-only -y
+
+      - name: install ovcd
+        run: opam install ovcd -y
+
+      - name: verify binaries
+        run: |
+          opam exec -- vcd_tool --help 2>&1 | head -3
+          opam exec -- vcd_dump --help 2>&1 | head -3
+
+      - name: build consumer application
+        run: opam exec -- dune build --root .github/workflows/consumer
+
+      - name: run consumer application
+        run: opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.vcd
+
+      - name: install ovcd with tests
+        run: opam install ovcd --with-test -y

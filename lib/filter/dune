@@ -1,5 +1,6 @@
 (library
  (name vcd_filter)
+ (public_name ovcd.vcd_filter)
  (wrapped false)
  (modules
   filter_ast

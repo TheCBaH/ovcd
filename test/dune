@@ -5,10 +5,11 @@
   test_lexer
   test_header_parser
   test_vcd
+  test_value
   test_filter_parse
   test_filter_match
   test_stateful)
- (libraries vcd vcd_util vcd_filter)
+ (libraries ovcd vcd_util vcd_filter)
  (inline_tests)
  (preprocess
   (pps ppx_expect ppx_inline_test)))

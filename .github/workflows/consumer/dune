@@ -1,0 +1,5 @@
+(vendored_dirs vendored)
+
+(executable
+ (name vcd_info)
+ (libraries ovcd ovcd.vcd_types ovcd.vcd_util ovcd.vcd_filter re))

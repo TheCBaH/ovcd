@@ -1,0 +1,14 @@
+$timescale 1ns $end
+$scope module tb $end
+$var wire 8 # counter $end
+$var wire 1 ! clk $end
+$upscope $end
+$enddefinitions $end
+#0
+b00000000 #
+0!
+#5
+1!
+#10
+b00000001 #
+0!

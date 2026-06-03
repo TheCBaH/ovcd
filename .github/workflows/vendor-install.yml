@@ -1,0 +1,79 @@
+name: dune vendored install
+
+# Verifies that the consumer application builds correctly when ovcd is
+# vendored as a source subtree rather than installed via opam.
+#
+# Only the .github/workflows/consumer/ subtree is sparse-checked-out from the repo.
+# The full ovcd source tree is fetched as a GitHub archive tarball and
+# extracted into .github/workflows/consumer/vendored/ovcd/, making it a dune vendored
+# dependency.  .github/workflows/consumer/dune has (vendored_dirs vendored), so dune
+# resolves ovcd, vcd_util, and vcd_filter from the local source rather than
+# opam.
+#
+# External dependencies that cannot be vendored (menhir build tool, re library)
+# are installed via opam.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  vendored:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # For pull_request events github.sha is a synthetic merge commit that
+      # does not exist as a real push; use the actual PR head SHA instead.
+      - name: resolve git ref
+        id: ref
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "repo=${{ github.event.pull_request.head.repo.full_name }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.pull_request.head.sha }}"            >> "$GITHUB_OUTPUT"
+          else
+            echo "repo=${{ github.repository }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}"          >> "$GITHUB_OUTPUT"
+          fi
+
+      # Sparse-checkout only the .github/workflows/consumer/ subtree — the ovcd source
+      # tree is intentionally absent; it will be fetched below as an archive.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.sha }}
+          repository: ${{ steps.ref.outputs.repo }}
+          sparse-checkout: .github/workflows/consumer
+          sparse-checkout-cone-mode: true
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "4.14"
+          opam-pin: false
+
+      # Install only the external build-time deps that ovcd requires when
+      # built from source (menhir parser generator, re regex library).
+      # ovcd itself is NOT installed — it comes from the vendored subtree.
+      - name: install vendored build deps
+        run: opam install menhir re -y
+
+      # Fetch the ovcd source archive for the exact commit under test and
+      # unpack it into .github/workflows/consumer/vendored/ovcd/ so dune treats it as a
+      # vendored dependency (.github/workflows/consumer/dune has (vendored_dirs vendored)).
+      - name: fetch ovcd source archive
+        run: |
+          SHA="${{ steps.ref.outputs.sha }}"
+          REPO="${{ steps.ref.outputs.repo }}"
+          mkdir -p .github/workflows/consumer/vendored
+          curl -fsSL "https://github.com/${REPO}/archive/${SHA}.tar.gz" \
+            | tar -xz -C .github/workflows/consumer/vendored/
+          mv .github/workflows/consumer/vendored/ovcd-${SHA} .github/workflows/consumer/vendored/ovcd
+
+      - name: build consumer with vendored ovcd
+        run: opam exec -- dune build --root .github/workflows/consumer
+
+      - name: run consumer with vendored ovcd
+        run: opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.vcd
