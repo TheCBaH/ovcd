@@ -344,11 +344,28 @@ let%expect_test "Resolver — find_all" =
       (String.concat "; " (List.map (fun e -> ID.to_string (Vcd.Resolver.entry_id e)) entries))
   in
   show "counter_tb.clock";
+  (* exact: tail=["clock"], exercises upper-bound stop *)
   show "counter_tb.*";
+  (* prefix only: prefix=["counter_tb"] *)
+  show "counter_tb.top.*";
+  (* 2-component prefix *)
   show "**.out";
+  (* single-component tail *)
+  show "**.top.clock";
+  (* 2-component tail *)
+  show "counter_tb.**.clock";
+  (* both anchors: tail wins *)
+  show "**";
+  (* no anchor: full scan *)
   show "nope.nope";
-  [%expect {|
+  (* no match *)
+  [%expect
+    {|
     "counter_tb.clock" -> ["]
     "counter_tb.*" -> [$; #; "; !]
+    "counter_tb.top.*" -> [%; $; #; "]
     "**.out" -> [%; !]
+    "**.top.clock" -> ["]
+    "counter_tb.**.clock" -> ["]
+    "**" -> [%; $; #; "; !]
     "nope.nope" -> [] |}]

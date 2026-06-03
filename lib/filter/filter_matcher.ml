@@ -21,6 +21,12 @@ let glob_match parts str =
   in
   glob_match_aux parts 0
 
+let anchors pat =
+  let rec take_lits = function [] -> [] | Literal s :: rest -> s :: take_lits rest | _ -> [] in
+  let head = take_lits pat in
+  let tail = List.rev (take_lits (List.rev pat)) in
+  (head, tail)
+
 let matches pattern ref =
   let rec matches_aux pats cs =
     match (pats, cs) with

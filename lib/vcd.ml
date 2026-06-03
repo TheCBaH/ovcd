@@ -72,35 +72,50 @@ module Ref_set = Set.Make (Vcd_types.Reference)
 (* ------------------------------------------------------------------ *)
 
 module Resolver = struct
+  (* Forward-order reference map: key is the forward (scope-first) component list.
+     Comparator is a plain list compare with no allocation, enabling efficient
+     prefix queries for patterns like [counter_tb.**]. *)
+  module Ref_fwd_map = Map.Make (struct
+    type t = string list
+
+    let compare = List.compare String.compare
+  end)
+
   type entry = { id : Vcd_types.ID.t; size : int; references : Ref_set.t }
-  type t = { by_id : entry ID_map.t; by_ref : Vcd_types.ID.t Ref_map.t }
+
+  type t = {
+    by_id : entry ID_map.t;
+    by_ref : Vcd_types.ID.t Ref_map.t;  (** Reversed reference order: leaf first. *)
+    by_ref_fwd : Vcd_types.ID.t Ref_fwd_map.t;  (** Forward reference order: scope first. *)
+  }
 
   let make header =
     let open Vcd_ast in
     let open Vcd_types.Reference in
-    let rec collect path vars children (by_id, by_ref) =
-      let by_id, by_ref =
+    let rec collect path vars children (by_id, by_ref, by_ref_fwd) =
+      let by_id, by_ref, by_ref_fwd =
         List.fold_left
-          (fun (by_id, by_ref) var ->
+          (fun (by_id, by_ref, by_ref_fwd) var ->
             let r = push var.ref path in
             let entry =
               match ID_map.find_opt var.id by_id with
               | None -> { id = var.id; size = var.size; references = Ref_set.singleton r }
               | Some e -> { e with references = Ref_set.add r e.references }
             in
-            (ID_map.add var.id entry by_id, Ref_map.add r var.id by_ref))
-          (by_id, by_ref) vars
+            (ID_map.add var.id entry by_id, Ref_map.add r var.id by_ref, Ref_fwd_map.add (to_list r) var.id by_ref_fwd))
+          (by_id, by_ref, by_ref_fwd) vars
       in
       List.fold_left
         (fun acc child -> collect (push child.s_name path) child.vars child.children acc)
-        (by_id, by_ref) children
+        (by_id, by_ref, by_ref_fwd) children
     in
-    let by_id, by_ref =
+    let by_id, by_ref, by_ref_fwd =
       List.fold_left
         (fun acc scope -> collect (push scope.s_name empty) scope.vars scope.children acc)
-        (ID_map.empty, Ref_map.empty) header.scopes
+        (ID_map.empty, Ref_map.empty, Ref_fwd_map.empty)
+        header.scopes
     in
-    { by_id; by_ref }
+    { by_id; by_ref; by_ref_fwd }
 
   let entry_id e = e.id
   let entry_size e = e.size
@@ -110,10 +125,58 @@ module Resolver = struct
   let find_id t ref = Ref_map.find_opt ref t.by_ref
   let fold f t acc = ID_map.fold (fun _ e a -> f e a) t.by_id acc
 
+  let list_starts_with prefix lst =
+    let rec go = function
+      | [], _ -> true
+      | _ :: _, [] -> false
+      | ph :: pt, lh :: lt -> String.equal ph lh && go (pt, lt)
+    in
+    go (prefix, lst)
+
+  (* Range-query [by_ref] for references ending with [tail_fwd].
+     [by_ref] sorts by the reversed internal representation (leaf first), so
+     [lb = Reference.of_list tail_fwd] (internal form = List.rev tail_fwd) is the
+     lower bound of the target interval.  The upper bound [ub] is derived by
+     appending "\x00" to the first component of [tail_fwd]: every string in the
+     half-open interval [lb, ub) ends with [tail_fwd] in forward order, with no
+     [to_list] call inside the loop. *)
+  let collect_by_tail tail_fwd t =
+    let lb = Vcd_types.Reference.of_list tail_fwd in
+    let ub = Vcd_types.Reference.of_list ((List.hd tail_fwd ^ "\x00") :: List.tl tail_fwd) in
+    let rec go acc s =
+      match s () with
+      | Seq.Nil -> acc
+      | Seq.Cons ((k, id), rest) -> if Vcd_types.Reference.compare k ub < 0 then go (ID_set.add id acc) rest else acc
+    in
+    go ID_set.empty (Ref_map.to_seq_from lb t.by_ref)
+
+  (* Range-query [by_ref_fwd] for references starting with [prefix_fwd].
+     Keys are [string list] in forward order, so [prefix_fwd] is used directly
+     as the lower bound with no conversion, and the per-element check is a
+     plain [list_starts_with] with no allocation. *)
+  let collect_by_prefix prefix_fwd t =
+    let rec go acc s =
+      match s () with
+      | Seq.Nil -> acc
+      | Seq.Cons ((k, id), rest) -> if list_starts_with prefix_fwd k then go (ID_set.add id acc) rest else acc
+    in
+    go ID_set.empty (Ref_fwd_map.to_seq_from prefix_fwd t.by_ref_fwd)
+
   let find_all pat t =
-    ID_map.fold
-      (fun _ e acc -> if Ref_set.exists (Filter_matcher.matches pat) e.references then e :: acc else acc)
-      t.by_id []
+    let head, tail = Filter_matcher.anchors pat in
+    match (head, tail) with
+    | [], [] ->
+        ID_map.fold
+          (fun _ e acc -> if Ref_set.exists (Filter_matcher.matches pat) e.references then e :: acc else acc)
+          t.by_id []
+    | _ ->
+        let candidate_ids = match tail with [] -> collect_by_prefix head t | _ -> collect_by_tail tail t in
+        ID_set.fold
+          (fun id acc ->
+            match ID_map.find_opt id t.by_id with
+            | None -> acc
+            | Some e -> if Ref_set.exists (Filter_matcher.matches pat) e.references then e :: acc else acc)
+          candidate_ids []
 end
 
 (* ------------------------------------------------------------------ *)

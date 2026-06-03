@@ -15,6 +15,10 @@
       Test_MIPS.**        matches  Test_MIPS and all its descendants
     v} *)
 
+val anchors : Filter_ast.pattern -> string list * string list
+(** [anchors pat] returns [(head, tail)] where [head] is the longest leading run of [Literal] segments and [tail] is the
+    longest trailing run, both in forward (scope-first) order. Used to derive range-query bounds for indexed lookups. *)
+
 val matches : Filter_ast.pattern -> Vcd_types.Reference.t -> bool
 (** [matches pattern ref] is [true] when [pattern] covers every component of [ref]. [Glob] segments are handled by
     backtracking; alternatives are tried left-to-right with short-circuit evaluation. *)
