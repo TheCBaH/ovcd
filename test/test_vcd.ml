@@ -332,16 +332,21 @@ let%expect_test "Resolver — find_id reverse lookup" =
 
 let%expect_test "Resolver — find_all" =
   (* counter_vcd has aliased IDs (same ID declared in two scopes).
-     find_all returns an entry when ANY of its references match, so a pattern
-     that matches only counter_tb.clock still returns the aliased entry whose
-     second reference is counter_tb.top.clock. *)
+     find_all returns entries filtered to only the references that matched —
+     a pattern matching only counter_tb.clock yields the entry with just that
+     reference, not the full alias set including counter_tb.top.clock. *)
   let r = Vcd.parse_string counter_vcd in
   let resolver = Vcd.Resolver.make r.header in
   let pat s = Result.get_ok (Filter_parser.parse s) in
   let show p =
     let entries = Vcd.Resolver.find_all (pat p) resolver in
-    Printf.printf "%S -> [%s]\n" p
-      (String.concat "; " (List.map (fun e -> ID.to_string (Vcd.Resolver.entry_id e)) entries))
+    let show_entry e =
+      let refs =
+        Vcd.Resolver.entry_references e |> Vcd.Ref_set.elements |> List.map Reference.to_string |> String.concat ","
+      in
+      Printf.sprintf "%s[%s]" (ID.to_string (Vcd.Resolver.entry_id e)) refs
+    in
+    Printf.printf "%S -> [%s]\n" p (String.concat "; " (List.map show_entry entries))
   in
   show "counter_tb.clock";
   (* exact: tail=["clock"], exercises upper-bound stop *)
@@ -354,18 +359,18 @@ let%expect_test "Resolver — find_all" =
   show "**.top.clock";
   (* 2-component tail *)
   show "counter_tb.**.clock";
-  (* both anchors: tail wins *)
+  (* both anchors: both refs match the aliased entry *)
   show "**";
   (* no anchor: full scan *)
   show "nope.nope";
   (* no match *)
   [%expect
     {|
-    "counter_tb.clock" -> ["]
-    "counter_tb.*" -> [$; #; "; !]
-    "counter_tb.top.*" -> [%; $; #; "]
-    "**.out" -> [%; !]
-    "**.top.clock" -> ["]
-    "counter_tb.**.clock" -> ["]
-    "**" -> [%; $; #; "; !]
+    "counter_tb.clock" -> ["[counter_tb.clock]]
+    "counter_tb.*" -> [$[counter_tb.reset]; #[counter_tb.enable]; "[counter_tb.clock]; ![counter_tb.out]]
+    "counter_tb.top.*" -> [%[counter_tb.top.out]; $[counter_tb.top.reset]; #[counter_tb.top.enable]; "[counter_tb.top.clock]]
+    "**.out" -> [%[counter_tb.top.out]; ![counter_tb.out]]
+    "**.top.clock" -> ["[counter_tb.top.clock]]
+    "counter_tb.**.clock" -> ["[counter_tb.clock,counter_tb.top.clock]]
+    "**" -> [%[counter_tb.top.out]; $[counter_tb.reset,counter_tb.top.reset]; #[counter_tb.enable,counter_tb.top.enable]; "[counter_tb.clock,counter_tb.top.clock]; ![counter_tb.out]]
     "nope.nope" -> [] |}]

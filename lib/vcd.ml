@@ -164,18 +164,16 @@ module Resolver = struct
 
   let find_all pat t =
     let head, tail = Filter_matcher.anchors pat in
+    let add_if_match e acc =
+      let refs = Ref_set.filter (Filter_matcher.matches pat) e.references in
+      if Ref_set.is_empty refs then acc else { e with references = refs } :: acc
+    in
     match (head, tail) with
-    | [], [] ->
-        ID_map.fold
-          (fun _ e acc -> if Ref_set.exists (Filter_matcher.matches pat) e.references then e :: acc else acc)
-          t.by_id []
+    | [], [] -> ID_map.fold (fun _ e acc -> add_if_match e acc) t.by_id []
     | _ ->
         let candidate_ids = match tail with [] -> collect_by_prefix head t | _ -> collect_by_tail tail t in
         ID_set.fold
-          (fun id acc ->
-            match ID_map.find_opt id t.by_id with
-            | None -> acc
-            | Some e -> if Ref_set.exists (Filter_matcher.matches pat) e.references then e :: acc else acc)
+          (fun id acc -> match ID_map.find_opt id t.by_id with None -> acc | Some e -> add_if_match e acc)
           candidate_ids []
 end
 
