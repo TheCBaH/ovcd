@@ -13,6 +13,7 @@ module Timestamp = struct
 
   let equal = Int64.equal
   let of_string s = Int64.of_string s
+  let to_int64 t = t
   let compare = Int64.compare
   let pp fmt t = Format.fprintf fmt "%Ld" t
 end

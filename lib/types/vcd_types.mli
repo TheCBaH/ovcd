@@ -13,6 +13,7 @@ module Timestamp : sig
 
   val equal : t -> t -> bool
   val of_string : string -> t
+  val to_int64 : t -> int64
   val compare : t -> t -> int
   val pp : Format.formatter -> t -> unit
 end
