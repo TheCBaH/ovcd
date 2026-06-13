@@ -88,6 +88,10 @@ module Value : sig
   (** [get_int_exn v] returns the full integer value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
       wider than a native [int], is a [Real], or is an [Other] value. *)
 
+  val get_bool_exn : t -> bool
+  (** [get_bool_exn v] returns [false] if [v] is zero, [true] otherwise. Raises [Invalid_argument] under the same
+      conditions as {!get_int_exn}. *)
+
   val get_int64_exn : t -> int64
   (** [get_int64_exn v] returns the full [int64] value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
       wider than 64 bits ([Bytes]), is a [Real], or is an [Other] value. *)

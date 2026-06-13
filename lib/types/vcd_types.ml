@@ -151,6 +151,9 @@ module Value = struct
     | Real _ -> invalid_arg "Value.get_int_exn: real value"
   [@@ai_disclosure "ai-generated"]
 
+  let get_bool_exn v = get_int_exn v <> 0
+  [@@ai_disclosure "ai-generated"]
+
   let get_int64_exn = function
     | Scalar B0 -> 0L
     | Scalar B1 -> 1L
