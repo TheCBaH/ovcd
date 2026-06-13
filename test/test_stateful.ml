@@ -153,8 +153,7 @@ let%expect_test "tracked filter — state only holds tracked IDs" =
   (* Only ! is tracked and no reported filter is set, so .changes only contains
      ! changes.  Events are suppressed at t=1 and t=3 where ! does not change. *)
   Seq.iter pp_event (stream ~tracked:(id_set [ "!" ]) (stream_of counter_vcd));
-  [%expect
-    {|
+  [%expect {|
     t=2
       state: !=bx
       changes: !=b0 |}]
