@@ -153,6 +153,12 @@ module Value = struct
 
   let get_bool_exn v = get_int_exn v <> 0 [@@ai_disclosure "ai-generated"]
 
+  let get_int ?(default = 0) v = match get_int_exn v with exception Invalid_argument _ -> default | n -> n
+  [@@ai_disclosure "ai-generated"]
+
+  let get_bool ?(default = false) v = match get_bool_exn v with exception Invalid_argument _ -> default | b -> b
+  [@@ai_disclosure "ai-generated"]
+
   let get_int64_exn = function
     | Scalar B0 -> 0L
     | Scalar B1 -> 1L
@@ -163,6 +169,9 @@ module Value = struct
     | Scalars _ -> invalid_arg "Value.get_int64_exn: X/Z value"
     | Other _ -> invalid_arg "Value.get_int64_exn: 9-state or unrecognised value"
     | Real _ -> invalid_arg "Value.get_int64_exn: real value"
+  [@@ai_disclosure "ai-generated"]
+
+  let get_int64 ?(default = 0L) v = match get_int64_exn v with exception Invalid_argument _ -> default | n -> n
   [@@ai_disclosure "ai-generated"]
 
   (* Returns the byte covering bits [byte_idx*8+7 : byte_idx*8] (LSB = bit 0).
@@ -187,6 +196,10 @@ module Value = struct
     | Real _ -> invalid_arg "Value.get_byte_exn: real value"
   [@@ai_disclosure "ai-generated"]
 
+  let get_byte ?(default = 0) v byte_idx =
+    match get_byte_exn v byte_idx with exception Invalid_argument _ -> default | n -> n
+  [@@ai_disclosure "ai-generated"]
+
   let get_bits_exn v ~lo ~hi =
     if lo < 0 || hi < lo then invalid_arg "Value.get_bits_exn: invalid range";
     let width = hi - lo + 1 in
@@ -200,6 +213,10 @@ module Value = struct
         go (acc lor contrib) (byte_idx + 1)
     in
     go 0 (lo / 8) land ((1 lsl width) - 1)
+  [@@ai_disclosure "ai-generated"]
+
+  let get_bits ?(default = 0) v ~lo ~hi =
+    match get_bits_exn v ~lo ~hi with exception Invalid_argument _ -> default | n -> n
   [@@ai_disclosure "ai-generated"]
 
   let get_bits64_exn v ~lo ~hi =
@@ -216,6 +233,10 @@ module Value = struct
     in
     let mask = if width = 64 then Int64.minus_one else Int64.pred (Int64.shift_left 1L width) in
     Int64.logand (go 0L (lo / 8)) mask
+  [@@ai_disclosure "ai-generated"]
+
+  let get_bits64 ?(default = 0L) v ~lo ~hi =
+    match get_bits64_exn v ~lo ~hi with exception Invalid_argument _ -> default | n -> n
   [@@ai_disclosure "ai-generated"]
 end
 

@@ -92,24 +92,44 @@ module Value : sig
   (** [get_bool_exn v] returns [false] if [v] is zero, [true] otherwise. Raises [Invalid_argument] under the same
       conditions as {!get_int_exn}. *)
 
+  val get_int : ?default:int -> t -> int
+  (** [get_int v] returns the integer value of [v], or [default] (default [0]) if {!get_int_exn} would raise. *)
+
+  val get_bool : ?default:bool -> t -> bool
+  (** [get_bool v] returns the boolean value of [v], or [default] (default [false]) if {!get_bool_exn} would raise. *)
+
   val get_int64_exn : t -> int64
   (** [get_int64_exn v] returns the full [int64] value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
       wider than 64 bits ([Bytes]), is a [Real], or is an [Other] value. *)
+
+  val get_int64 : ?default:int64 -> t -> int64
+  (** [get_int64 v] returns the [int64] value of [v], or [default] (default [0L]) if {!get_int64_exn} would raise. *)
 
   val get_byte_exn : t -> int -> int
   (** [get_byte_exn v byte_idx] returns the byte covering bits [byte_idx*8+7 : byte_idx*8] (LSB = bit 0) as an integer
       in 0..255. Returns 0 for [byte_idx] beyond the payload width (zero-fill). Raises [Invalid_argument] for X/Z,
       [Real], or [Other] values, and for negative [byte_idx]. *)
 
+  val get_byte : ?default:int -> t -> int -> int
+  (** [get_byte v byte_idx] returns the byte value, or [default] (default [0]) if {!get_byte_exn} would raise. *)
+
   val get_bits_exn : t -> lo:int -> hi:int -> int
   (** [get_bits_exn v ~lo ~hi] extracts bits [[hi:lo]] (LSB = bit 0, inclusive) as an unsigned [int]. Bits beyond the
       payload width are zero-filled. Raises [Invalid_argument] if the range is invalid, wider than [int_bits] bits, or
       the value contains X/Z bits, is a [Real], or is an [Other] value. *)
 
+  val get_bits : ?default:int -> t -> lo:int -> hi:int -> int
+  (** [get_bits v ~lo ~hi] extracts bits [[hi:lo]] as an unsigned [int], or [default] (default [0]) if {!get_bits_exn}
+      would raise. *)
+
   val get_bits64_exn : t -> lo:int -> hi:int -> int64
   (** [get_bits64_exn v ~lo ~hi] extracts bits [[hi:lo]] (LSB = bit 0, inclusive) as an unsigned [int64]. Bits beyond
       the payload width are zero-filled. Raises [Invalid_argument] if the range is invalid, wider than 64 bits, or the
       value contains X/Z bits, is a [Real], or is an [Other] value. *)
+
+  val get_bits64 : ?default:int64 -> t -> lo:int -> hi:int -> int64
+  (** [get_bits64 v ~lo ~hi] extracts bits [[hi:lo]] as an unsigned [int64], or [default] (default [0L]) if
+      {!get_bits64_exn} would raise. *)
 end
 
 [@@@ai_disclosure "ai-assisted"]
