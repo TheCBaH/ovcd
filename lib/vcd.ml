@@ -247,9 +247,7 @@ module Stateful = struct
       else
         let new_state, filtered, term = collect false state ID_map.empty events in
         let in_range = in_ranges ranges t in
-        let effective_changes =
-          if in_range && (not was_in_range) && ranges <> [] then new_state else filtered
-        in
+        let effective_changes = if in_range && (not was_in_range) && ranges <> [] then new_state else filtered in
         let emit = in_range && not (ID_map.is_empty effective_changes) in
         match term with
         | `Nil ->
