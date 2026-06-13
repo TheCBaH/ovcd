@@ -218,8 +218,14 @@ module Stateful = struct
   type event = { state : state; time : Vcd_types.Timestamp.t; changes : state }
 
   let stream ?tracked ?reported ?(ranges : time_range list = []) events =
-    let is_tracked id = match tracked with None -> true | Some s -> ID_set.mem id s in
-    let is_reported id = match reported with None -> true | Some s -> ID_set.mem id s in
+    let ids =
+      match (tracked, reported) with
+      | None, None -> None
+      | Some t, None -> Some t
+      | None, Some r -> Some r
+      | Some t, Some r -> Some (ID_set.union t r)
+    in
+    let in_ids id = match ids with None -> true | Some s -> ID_set.mem id s in
     let rec collect in_dump state filtered events =
       match events () with
       | Seq.Nil -> (state, filtered, `Nil)
@@ -227,14 +233,14 @@ module Stateful = struct
       | Seq.Cons (Vcd_ast.DumpStart _, rest) -> collect true state filtered rest
       | Seq.Cons (Vcd_ast.DumpEnd, rest) -> collect false state filtered rest
       | Seq.Cons (Vcd_ast.Change (id, v), rest) ->
-          let new_state = if is_tracked id then ID_map.add id v state else state in
-          let new_filtered = if (not in_dump) && is_reported id then ID_map.add id v filtered else filtered in
+          let new_state = if in_ids id then ID_map.add id v state else state in
+          let new_filtered = if (not in_dump) && in_ids id then ID_map.add id v filtered else filtered in
           collect in_dump new_state new_filtered rest
       | Seq.Cons (_, rest) -> collect in_dump state filtered rest
     in
     (* [was_in_range] = whether the previous timestep was inside any range.
        When transitioning from outside to inside (and ranges were specified),
-       we emit a snapshot of the full reported state so the consumer can see
+       we emit a snapshot of the tracked+reported state so the consumer can see
        values that changed while the stream was outside the range. *)
     let rec loop was_in_range state t events () =
       if past_all_ranges ranges t then Seq.Nil
@@ -242,8 +248,7 @@ module Stateful = struct
         let new_state, filtered, term = collect false state ID_map.empty events in
         let in_range = in_ranges ranges t in
         let effective_changes =
-          if in_range && (not was_in_range) && ranges <> [] then ID_map.filter (fun id _ -> is_reported id) new_state
-          else filtered
+          if in_range && (not was_in_range) && ranges <> [] then new_state else filtered
         in
         let emit = in_range && not (ID_map.is_empty effective_changes) in
         match term with

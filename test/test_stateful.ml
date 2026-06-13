@@ -150,32 +150,26 @@ let%expect_test "dumpall mid-simulation — reassertions suppressed, real change
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "tracked filter — state only holds tracked IDs" =
-  (* Only ! is tracked, so .state never contains other IDs.
-     All IDs are still reported in .changes (no reported filter). *)
+  (* Only ! is tracked and no reported filter is set, so .changes only contains
+     ! changes.  Events are suppressed at t=1 and t=3 where ! does not change. *)
   Seq.iter pp_event (stream ~tracked:(id_set [ "!" ]) (stream_of counter_vcd));
   [%expect
     {|
-    t=1
-      state: !=bx
-      changes: "=0 $=1
     t=2
       state: !=bx
-      changes: !=b0 "=1 %=b0
-    t=3
-      state: !=b0
-      changes: "=0 $=0 |}]
+      changes: !=b0 |}]
 
 (* ------------------------------------------------------------------ *)
 (*  reported filter                                                     *)
 (* ------------------------------------------------------------------ *)
 
 let%expect_test "reported filter — events only when reported ID changes" =
-  (* Only changes to ! are reported.  ! does not change at t=1 or t=3,
-     so those timesteps produce no event.  State is complete at all times. *)
+  (* Only ! is in the effective set, so .state only tracks ! and .changes only
+     contains ! changes.  No events at t=1 or t=3 where ! does not change. *)
   Seq.iter pp_event (stream ~reported:(id_set [ "!" ]) (stream_of counter_vcd));
   [%expect {|
     t=2
-      state: !=bx "=0 #=0 $=1 %=bx
+      state: !=bx
       changes: !=b0 |}]
 
 let%expect_test "reported filter — no events when reported ID never changes" =
@@ -189,24 +183,21 @@ let%expect_test "reported filter — no events when reported ID never changes" =
 (*  tracked and reported independently                                  *)
 (* ------------------------------------------------------------------ *)
 
-let%expect_test "tracked and reported independent — reported ID absent from state" =
+let%expect_test "tracked and reported — union forms effective set" =
   (* tracked={!}  reported={"}:
-     - .state only ever contains !, updated when ! changes
-     - .changes only contains ", emitted whenever " changes
-     The two sets are orthogonal: " is surfaced in .changes but never
-     appears in .state. *)
+     effective set = {! ∪ "}: both appear in .state and .changes. *)
   Seq.iter pp_event (stream ~tracked:(id_set [ "!" ]) ~reported:(id_set [ "\"" ]) (stream_of counter_vcd));
   [%expect
     {|
-    t=1
-      state: !=bx
-      changes: "=0
-    t=2
-      state: !=bx
-      changes: "=1
-    t=3
-      state: !=b0
-      changes: "=0 |}]
+      t=1
+        state: !=bx "=1
+        changes: "=0
+      t=2
+        state: !=bx "=0
+        changes: !=b0 "=1
+      t=3
+        state: !=b0 "=1
+        changes: "=0 |}]
 
 (* ------------------------------------------------------------------ *)
 (*  Time range filters                                                  *)

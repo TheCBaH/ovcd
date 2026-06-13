@@ -93,27 +93,28 @@ module Stateful : sig
   (** [find state id] returns the current value of [id] in [state], or [None] if unseen. *)
 
   type event = {
-    state : state;  (** Complete tracked state as of the end of the previous timestep. *)
+    state : state;  (** Current values of the effective ID set, as of the end of the previous timestep. *)
     time : Vcd_types.Timestamp.t;
     changes : state;
-        (** IDs whose values are reported at [time]. Outside dump blocks this is the delta — only IDs that actually
-            changed. At the first timestep inside each [ranges] interval this is a full snapshot of every [reported] ID
-            in the current tracked state, so that the consumer sees values that changed while the stream was outside the
-            range. *)
+        (** IDs in the effective set whose values changed at [time]. Outside dump blocks this is the delta. At the first
+            timestep inside each [ranges] interval this is a full snapshot of the effective ID set in the current state,
+            so that the consumer sees values that changed while the stream was outside the range. *)
   }
 
   val stream : ?tracked:ID_set.t -> ?reported:ID_set.t -> ?ranges:time_range list -> Vcd_ast.event Seq.t -> event Seq.t
   (** Build a stateful sequence from a simulation event stream.
 
-      Produces one {!event} per timestep where [event.changes] is non-empty. Signal state is always tracked regardless
-      of all filters; only emission is gated.
+      The {e effective ID set} is [tracked ∪ reported] when both are given, or whichever is given when only one is, or
+      all IDs when neither is. Both [event.state] and [event.changes] are restricted to this set.
 
-      @param tracked IDs to maintain in [event.state]; defaults to all IDs.
-      @param reported IDs to surface in [event.changes]; defaults to all IDs.
+      Produces one {!event} per timestep where [event.changes] is non-empty.
+
+      @param tracked IDs to include in the effective set.
+      @param reported Additional IDs to include in the effective set.
       @param ranges
         Time intervals to emit events for; defaults to all time. Multiple ranges form a union. The sequence terminates
         once the current timestamp exceeds all [stop] bounds. At the first timestep of each range interval,
-        [event.changes] is a full snapshot of all [reported] IDs in the current state (not just the delta), so that
+        [event.changes] is a full snapshot of the effective set in the current state (not just the delta), so that
         consumers know the current value of any signal that changed while the stream was outside the range. *)
 end
 
