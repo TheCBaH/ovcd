@@ -42,7 +42,7 @@ jobs:
 
       # Sparse-checkout only the .github/workflows/consumer/ subtree — the rest of the
       # source tree is intentionally absent; ovcd itself comes from the opam pin.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ steps.ref.outputs.sha }}
           repository: ${{ steps.ref.outputs.repo }}
