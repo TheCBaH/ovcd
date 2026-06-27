@@ -24,15 +24,6 @@ type var_type =
   | Logic  (** SystemVerilog / VHDL 4-state net *)
   | Sstring  (** SystemVerilog / VHDL string variable *)
 
-(*
-let char_to_logic = function
-  | '0' -> B0
-  | '1' -> B1
-  | 'x' | 'X' -> X
-  | 'z' | 'Z' -> Z
-  | c -> failwith (Printf.sprintf "invalid logic char: %c" c)
-*)
-
 (** Pack a binary string (MSB-first, left-to-right) into a [bytes] value. Within each byte the MSB is bit 7. If
     [len mod 8 <> 0] the last byte is right-padded with zeros. *)
 let pack_bits s len =
