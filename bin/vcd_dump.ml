@@ -59,7 +59,7 @@ let () =
                 Printf.eprintf "error: invalid signal pattern %S: %s\n" s msg;
                 exit 1
             | Ok pat -> patterns := (s, pat) :: !patterns),
-        "PATTERN  Show only matching signals (exact name or DSL pattern; may be repeated; requires --resolve)" );
+        "PATTERN  Show only matching signals (exact name or DSL pattern; may be repeated; implies --resolve)" );
       ( "--signal-re",
         Arg.String
           (fun s ->
@@ -68,7 +68,7 @@ let () =
                 Printf.eprintf "error: invalid regex %S: %s\n" s (Printexc.to_string exn);
                 exit 1
             | re -> regexes := (s, re) :: !regexes),
-        "REGEX  Show only signals whose full name matches this PCRE regex (may be repeated; requires --resolve)" );
+        "REGEX  Show only signals whose full name matches this PCRE regex (may be repeated; implies --resolve)" );
     ]
   in
   let usage =
@@ -80,6 +80,9 @@ let () =
   let ranges = List.rev !ranges in
   let patterns = List.rev !patterns in
   let regexes = List.rev !regexes in
+  (* Selecting signals by name is only meaningful in the resolved output, so treat
+     --signal / --signal-re as implying --resolve. *)
+  if patterns <> [] || regexes <> [] then resolve := true;
   if files = [] then (
     Arg.usage spec usage;
     exit 1);

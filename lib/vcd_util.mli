@@ -34,7 +34,8 @@ val parse_range : string -> Vcd.time_range
     Syntax:
     - ["...N"] or ["..N"] or ["-N"] — from the start to [N] (inclusive)
     - ["N-..."] or ["N-.."] or ["N-"] — from [N] to the end
-    - ["N-M"] — from [N] to [M] (both inclusive)
+    - ["N-M"] or ["N:M"] — from [N] to [M] (both inclusive)
+    - ["N:"] / [":M"] — open lower / upper bound (colon form only)
     - ["N"] — point range [[N, N]]
     - ["..."] or [".."] — all time
 

@@ -621,3 +621,51 @@ Exact alias selection — counter_tb.top.clock selects only the inner alias:
   #26
     counter_tb.top.clock=1
 
+Colon time-range form mirrors the dash form — counter_tb.vcd (--range 1:3 == 1-3):
+
+  $ ./vcd_dump --resolve --range 1:3 ../test-data/vcdvcd/counter_tb.vcd
+  #1
+    counter_tb.top.clock=0
+    counter_tb.clock=0
+    counter_tb.top.reset=1
+    counter_tb.reset=1
+  #2
+    counter_tb.out=h0
+    counter_tb.top.out=h0
+    counter_tb.top.clock=1
+    counter_tb.clock=1
+  #3
+    counter_tb.top.clock=0
+    counter_tb.clock=0
+    counter_tb.top.reset=0
+    counter_tb.reset=0
+
+  $ ./vcd_dump --resolve --range 1-3 ../test-data/vcdvcd/counter_tb.vcd
+  #1
+    counter_tb.top.clock=0
+    counter_tb.clock=0
+    counter_tb.top.reset=1
+    counter_tb.reset=1
+  #2
+    counter_tb.out=h0
+    counter_tb.top.out=h0
+    counter_tb.top.clock=1
+    counter_tb.clock=1
+  #3
+    counter_tb.top.clock=0
+    counter_tb.clock=0
+    counter_tb.top.reset=0
+    counter_tb.reset=0
+
+--signal implies --resolve — counter_tb.vcd (no explicit --resolve flag):
+
+  $ ./vcd_dump --signal '**.clock' --range 0:1 ../test-data/vcdvcd/counter_tb.vcd
+  #0
+  $dumpvars
+    counter_tb.top.clock=1
+    counter_tb.clock=1
+  $end
+  #1
+    counter_tb.top.clock=0
+    counter_tb.clock=0
+

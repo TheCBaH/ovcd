@@ -293,3 +293,21 @@ Deeply nested scope — verilater.vcd (64-bit counter, no $dumpvars):
     top.leaf.counter=h00000000000000f0
   #303
     top.leaf.counter=h000000000000000f
+
+Colon time-range form mirrors the dash form — counter_tb.vcd (--range 1:3 == 1-3):
+
+  $ ./vcd_tool --signal '**.out' --range 1:3 ../test-data/vcdvcd/counter_tb.vcd
+  #1
+    counter_tb.out=bx
+    counter_tb.top.out=bx
+  #2
+    counter_tb.out=h0
+    counter_tb.top.out=h0
+
+  $ ./vcd_tool --signal '**.out' --range 1-3 ../test-data/vcdvcd/counter_tb.vcd
+  #1
+    counter_tb.out=bx
+    counter_tb.top.out=bx
+  #2
+    counter_tb.out=h0
+    counter_tb.top.out=h0

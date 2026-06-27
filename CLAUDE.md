@@ -45,4 +45,6 @@ When adding a cram case, write the command with no expected output and run `make
 
 **Surgical edits.** Match existing style; don't clean up adjacent code unless it is directly affected by your change.
 
+**Keep list entries alphabetically sorted.** When adding to a list (e.g. `modules`/`libraries`/`deps` in `dune` files, or similar enumerations), insert the new entry in alphabetical order rather than appending; sort the surrounding list if it makes the addition coherent.
+
 **Surface confusion early.** If a request has multiple valid interpretations (e.g. whether a new accessor belongs on `Resolver` or `vcd_types`), ask before implementing.

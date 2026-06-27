@@ -125,11 +125,15 @@ let parse_range s : Vcd.time_range =
     in
     Vcd.{ start = ts_of rest; stop = None }
   else
-    match String.index_opt s '-' with
-    | None ->
-        let t = Option.get (ts_of s) in
-        Vcd.{ start = Some t; stop = Some t }
+    match String.index_opt s ':' with
     | Some i -> Vcd.{ start = ts_of (String.sub s 0 i); stop = ts_of (String.sub s (i + 1) (String.length s - i - 1)) }
+    | None -> (
+        match String.index_opt s '-' with
+        | None ->
+            let t = Option.get (ts_of s) in
+            Vcd.{ start = Some t; stop = Some t }
+        | Some i ->
+            Vcd.{ start = ts_of (String.sub s 0 i); stop = ts_of (String.sub s (i + 1) (String.length s - i - 1)) })
 
 let in_ranges = Vcd.in_ranges
 let past_all_ranges = Vcd.past_all_ranges
