@@ -32,6 +32,7 @@
   ; vcdvcd
   ../test-data/vcdvcd/counter_tb.vcd
   ; pyDigitalWaveTools
+  ../test-data/pyDigitalWaveTools/tests/AxiRegTC_test_write.vcd
   ../test-data/pyDigitalWaveTools/tests/example0.vcd
   ; digital-vcd-parser
   ../test-data/digital-vcd-parser/test/debug/verilater.vcd))
