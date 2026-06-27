@@ -18,6 +18,13 @@ let count_scopes_and_vars scopes =
 
 let show_id filter id = Vcd_util.mem_filter filter id
 
+let parse_pattern_or_exit r s =
+  match Filter_parser.parse s with
+  | Error msg ->
+      Printf.eprintf "error: invalid signal pattern %S: %s\n" s msg;
+      exit 1
+  | Ok pat -> r := (s, pat) :: !r
+
 let () =
   let summary = ref false in
   let bench_runs = ref 0 in
@@ -26,6 +33,7 @@ let () =
   let ranges = ref [] in
   let patterns = ref [] in
   let regexes = ref [] in
+  let list_signals = ref [] in
   let files = ref [] in
   let spec =
     [
@@ -52,13 +60,7 @@ let () =
             | r -> ranges := r :: !ranges),
         "SPEC  Restrict to a time range, e.g. \"...1000\" or \"0-500\" or \"2000-...\"; may be repeated" );
       ( "--signal",
-        Arg.String
-          (fun s ->
-            match Filter_parser.parse s with
-            | Error msg ->
-                Printf.eprintf "error: invalid signal pattern %S: %s\n" s msg;
-                exit 1
-            | Ok pat -> patterns := (s, pat) :: !patterns),
+        Arg.String (parse_pattern_or_exit patterns),
         "PATTERN  Show only matching signals (exact name or DSL pattern; may be repeated; implies --resolve)" );
       ( "--signal-re",
         Arg.String
@@ -69,17 +71,21 @@ let () =
                 exit 1
             | re -> regexes := (s, re) :: !regexes),
         "REGEX  Show only signals whose full name matches this PCRE regex (may be repeated; implies --resolve)" );
+      ( "--list-signals",
+        Arg.String (parse_pattern_or_exit list_signals),
+        "PATTERN  List matching signals as 'path<TAB>id<TAB>width' and exit (may be repeated)" );
     ]
   in
   let usage =
     "usage: vcd_dump [--summary] [--bench N] [--resolve] [--strip] [--range SPEC]... [--signal PATTERN]... \
-     [--signal-re REGEX]... <file.vcd>"
+     [--signal-re REGEX]... [--list-signals PATTERN]... <file.vcd>"
   in
   Arg.parse spec (fun f -> files := f :: !files) usage;
   let files = List.rev !files in
   let ranges = List.rev !ranges in
   let patterns = List.rev !patterns in
   let regexes = List.rev !regexes in
+  let list_signals = List.rev !list_signals in
   (* Selecting signals by name is only meaningful in the resolved output, so treat
      --signal / --signal-re as implying --resolve. *)
   if patterns <> [] || regexes <> [] then resolve := true;
@@ -101,7 +107,30 @@ let () =
             Printf.eprintf "error: %s\n" msg;
             exit 1
       in
-      if !bench_runs > 0 then begin
+      if list_signals <> [] then begin
+        (* Header-only query: print every matched signal's path, ID code and width.
+           Reuses the filter machinery so unmatched patterns warn on stderr and only
+           the references that actually matched are listed (not unselected aliases). *)
+        let h = (parse ()).header in
+        let resolver = Vcd.Resolver.make h in
+        let filter = Vcd_util.build_filter ~pattern_label:"--list-signals" resolver list_signals [] in
+        let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
+        let rows =
+          Vcd.Resolver.fold
+            (fun entry acc ->
+              let id = Vcd.Resolver.entry_id entry in
+              let size = Vcd.Resolver.entry_size entry in
+              Vcd.Ref_set.fold
+                (fun r acc ->
+                  let display = match strip_map with None -> r | Some f -> f r in
+                  (Vcd_types.Reference.to_string display, Vcd_types.ID.to_string id, size) :: acc)
+                (Vcd_util.selected_refs resolver filter id)
+                acc)
+            resolver []
+        in
+        List.iter (fun (path, id, size) -> Printf.printf "%s\t%s\t%d\n" path id size) (List.sort_uniq compare rows)
+      end
+      else if !bench_runs > 0 then begin
         for _ = 1 to !bench_runs do
           let r = parse () in
           if !resolve then begin

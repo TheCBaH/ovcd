@@ -669,3 +669,23 @@ Colon time-range form mirrors the dash form — counter_tb.vcd (--range 1:3 == 1
     counter_tb.top.clock=0
     counter_tb.clock=0
 
+--list-signals lists matching paths with ID code and width (TAB-separated),
+sorted by path — **.out matches both the outer and inner aliases:
+
+  $ ./vcd_dump --list-signals '**.out' ../test-data/vcdvcd/counter_tb.vcd
+  counter_tb.out	!	2
+  counter_tb.top.out	%	2
+
+--list-signals with a scope wildcard — every signal directly under counter_tb:
+
+  $ ./vcd_dump --list-signals 'counter_tb.*' ../test-data/vcdvcd/counter_tb.vcd
+  counter_tb.clock	"	1
+  counter_tb.enable	#	1
+  counter_tb.out	!	2
+  counter_tb.reset	$	1
+
+--list-signals with no match prints nothing and warns on stderr:
+
+  $ ./vcd_dump --list-signals '**.nonexistent' ../test-data/vcdvcd/counter_tb.vcd 2>&1
+  warning: --list-signals "**.nonexistent" matched no signals
+

@@ -18,7 +18,7 @@ let ref_matches_any patterns regexes r =
   | [] -> false
   | _ -> List.exists (fun (_, re) -> Re.execp re (Vcd_types.Reference.to_string r)) regexes
 
-let build_filter resolver patterns regexes =
+let build_filter ?(pattern_label = "--signal") resolver patterns regexes =
   if patterns = [] && regexes = [] then None
   else begin
     let id_map =
@@ -36,7 +36,7 @@ let build_filter resolver patterns regexes =
     List.iter
       (fun (s, pat) ->
         if not (any_ref_matches (Filter_matcher.matches pat)) then
-          Printf.eprintf "warning: --signal %S matched no signals\n" s)
+          Printf.eprintf "warning: %s %S matched no signals\n" pattern_label s)
       patterns;
     List.iter
       (fun (s, re) ->

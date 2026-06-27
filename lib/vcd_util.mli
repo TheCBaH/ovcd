@@ -9,9 +9,16 @@ type filter
 (** Maps each matched [ID.t] to the specific subset of its [Reference.t] aliases that were selected by the user's
     patterns. Keeping per-alias granularity avoids printing unselected aliases of a matched ID. *)
 
-val build_filter : Vcd.Resolver.t -> (string * Filter_ast.pattern) list -> (string * Re.re) list -> filter option
+val build_filter :
+  ?pattern_label:string ->
+  Vcd.Resolver.t ->
+  (string * Filter_ast.pattern) list ->
+  (string * Re.re) list ->
+  filter option
 (** Build a filter from DSL patterns and compiled PCRE regexes. Returns [None] when both lists are empty (meaning "all
-    signals"). Emits a warning to stderr for any pattern or regex that matched nothing. *)
+    signals"). Emits a warning to stderr for any pattern or regex that matched nothing. [pattern_label] (default
+    ["--signal"]) names the CLI flag in those warnings, so callers driving the filter from a different flag (e.g.
+    [--list-signals]) report accurately. *)
 
 val filter_ids : filter -> ID_set.t
 (** Extract the set of matched IDs, for use with [Stateful.stream ~reported] or [Stateful.stream ~tracked]. *)
