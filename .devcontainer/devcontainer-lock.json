@@ -5,6 +5,11 @@
       "resolved": "ghcr.io/devcontainers/features/common-utils@sha256:cb0c4d3c276f157eed17935747e364178d75fee17f55c4e129966f64633deb3a",
       "integrity": "sha256:cb0c4d3c276f157eed17935747e364178d75fee17f55c4e129966f64633deb3a"
     },
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "1.1.0",
+      "resolved": "ghcr.io/devcontainers/features/sshd@sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee",
+      "integrity": "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+    },
     "ghcr.io/thecbah/ocaml-features/ocaml:1": {
       "version": "1.0.0",
       "resolved": "ghcr.io/thecbah/ocaml-features/ocaml@sha256:81f1fe3cfb909acc948a5a5e67ecd6a42600dd1e77966292e34901a5651f95f9",
