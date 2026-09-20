@@ -10,6 +10,3 @@
 [submodule "test-data/go-vcd-parser"]
 	path = test-data/go-vcd-parser
 	url = https://github.com/filmil/go-vcd-parser.git
-[submodule "test-data/digital-vcd-parser"]
-	path = test-data/digital-vcd-parser
-	url = https://github.com/Digital-EDA/digital-vcd-parser.git

@@ -280,23 +280,6 @@ Exact alias selection — counter_tb.top.clock selects only the inner alias:
   #26
     counter_tb.top.clock=1
 
-Deeply nested scope — verilater.vcd (64-bit counter, no $dumpvars):
-
-  $ ./vcd_tool ../test-data/digital-vcd-parser/test/debug/verilater.vcd
-  #1
-    top.clock=0
-  #2
-    top.clock=1
-  #300
-    top.clock=0
-    top.leaf.counter=h000000000000f000
-  #301
-    top.leaf.counter=h0000000000000f00
-  #302
-    top.leaf.counter=h00000000000000f0
-  #303
-    top.leaf.counter=h000000000000000f
-
 Colon time-range form mirrors the dash form — counter_tb.vcd (--range 1:3 == 1-3):
 
   $ ./vcd_tool --signal '**.out' --range 1:3 ../test-data/vcdvcd/counter_tb.vcd

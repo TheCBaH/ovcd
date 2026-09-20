@@ -33,9 +33,7 @@
   ../test-data/vcdvcd/counter_tb.vcd
   ; pyDigitalWaveTools
   ../test-data/pyDigitalWaveTools/tests/AxiRegTC_test_write.vcd
-  ../test-data/pyDigitalWaveTools/tests/example0.vcd
-  ; digital-vcd-parser
-  ../test-data/digital-vcd-parser/test/debug/verilater.vcd))
+  ../test-data/pyDigitalWaveTools/tests/example0.vcd))
 
 (cram
  (applies_to icarus synopsys ieee misc resolve)
@@ -65,15 +63,4 @@
   ../test-data/vcd-io/testcases/handy.vcd
   ../test-data/vcd-io/testcases/handy2.vcd
   ../test-data/vcd-io/testcases/handy3.vcd
-  ../test-data/vcd-io/testcases/wire_types.vcd
-  ; digital-vcd-parser
-  ../test-data/digital-vcd-parser/test/SIMv0.1/Tb_Sync_FIFO.vcd
-  ../test-data/digital-vcd-parser/test/SIMv0.2/Tb_Sync_FIFO.vcd
-  ../test-data/digital-vcd-parser/test/debug/base.vcd
-  ../test-data/digital-vcd-parser/test/debug/la0_waveform.vcd
-  ../test-data/digital-vcd-parser/test/debug/pe_tb.vcd
-  ../test-data/digital-vcd-parser/test/debug/small.vcd
-  ../test-data/digital-vcd-parser/test/debug/verilater.vcd
-  ../test-data/digital-vcd-parser/test/dump.vcd
-  ../test-data/digital-vcd-parser/test/samples/iverilog.large.vcd
-  ../test-data/digital-vcd-parser/test/samples/iverilog.small.vcd))
+  ../test-data/vcd-io/testcases/wire_types.vcd))

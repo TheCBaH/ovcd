@@ -51,13 +51,6 @@ extra-source "test-data-go-vcd-parser.tar.gz" {
     "sha256=b9de70f1a0b7824b0020f3cddfea6168a46c5d0b8cf8d67691a88cfd214e8776"
   ]
 }
-extra-source "test-data-digital-vcd-parser.tar.gz" {
-  src:
-    "https://github.com/Digital-EDA/digital-vcd-parser/archive/cd74a089e47aef8c1dcd23798a872e2ca684a3df.tar.gz"
-  checksum: [
-    "sha256=a47cee34eb3fc2f5933a0b85fabd0c7dad3bd67ef2210dd5af8f3d4b535fc5ca"
-  ]
-}
 build: [
   ["dune" "subst"] {dev}
   # Extract test-data archives into the expected submodule locations.
@@ -65,8 +58,7 @@ build: [
    "test-data/vcdvcd"
    "test-data/vcd-io"
    "test-data/pyDigitalWaveTools"
-   "test-data/go-vcd-parser"
-   "test-data/digital-vcd-parser"] {with-test}
+   "test-data/go-vcd-parser"] {with-test}
   ["tar" "-xzf" "test-data-vcdvcd.tar.gz"
    "--strip-components=1" "-C" "test-data/vcdvcd"] {with-test}
   ["tar" "-xzf" "test-data-vcd-io.tar.gz"
@@ -75,8 +67,6 @@ build: [
    "--strip-components=1" "-C" "test-data/pyDigitalWaveTools"] {with-test}
   ["tar" "-xzf" "test-data-go-vcd-parser.tar.gz"
    "--strip-components=1" "-C" "test-data/go-vcd-parser"] {with-test}
-  ["tar" "-xzf" "test-data-digital-vcd-parser.tar.gz"
-   "--strip-components=1" "-C" "test-data/digital-vcd-parser"] {with-test}
   [
     "dune"
     "build"

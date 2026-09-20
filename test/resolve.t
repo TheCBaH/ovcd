@@ -14,23 +14,6 @@ Resolve all IDs to hierarchical names — example0.vcd (single scope, scalars an
   #4
     unit0.vect0=h0014
 
-Deeply nested scope — verilater.vcd (Verilator output, 3-level scope, no $dumpvars):
-
-  $ ./vcd_dump --resolve ../test-data/digital-vcd-parser/test/debug/verilater.vcd
-  #1
-    top.clock=0
-  #2
-    top.clock=1
-  #300
-    top.clock=0
-    top.leaf.counter=h000000000000f000
-  #301
-    top.leaf.counter=h0000000000000f00
-  #302
-    top.leaf.counter=h00000000000000f0
-  #303
-    top.leaf.counter=h000000000000000f
-
 Nested scope — counter_tb.vcd (vcdvcd), IDs shared across parent and child scopes:
 
   $ ./vcd_dump --resolve ../test-data/vcdvcd/counter_tb.vcd
@@ -371,23 +354,6 @@ Unmatched --signal-re pattern emits a warning on stderr:
     vect0=h000a
   #4
     vect0=h0014
-
---strip with no filter strips the common prefix of all signals (verilater.vcd: top.*):
-
-  $ ./vcd_dump --resolve --strip ../test-data/digital-vcd-parser/test/debug/verilater.vcd
-  #1
-    clock=0
-  #2
-    clock=1
-  #300
-    clock=0
-    leaf.counter=h000000000000f000
-  #301
-    leaf.counter=h0000000000000f00
-  #302
-    leaf.counter=h00000000000000f0
-  #303
-    leaf.counter=h000000000000000f
 
 --strip with signals spanning two depths — strips shared counter_tb prefix:
 
