@@ -76,23 +76,15 @@ declaration:
   | pre_header_sim      { `Skip }
 
 (* Pre-header simulation content — some tools (e.g. logic-analyser exporters)
-   emit a timestamp and/or a $dump* block before the $date/$scope declarations.
-   Each rule consumes one such construct:
-   - A bare ID covers timestamps (#0) and value-change tokens (0!, b1010 …)
-     as they appear in the header token stream.
-   - A dump_kw … [$end] rule covers $dumpvars/$dumpon/… blocks whose closing
-     $end may be absent when the block has no content. *)
+   emit a timestamp and/or a $dump* block before the $date/$scope declarations
+   — and unknown top-level blocks such as $timezero or GTKWave's $attrbegin.
+   Each rule consumes one token of such a construct:
+   - A word covers timestamps (#0), value-change tokens (0!, b1010 …), the
+     $dump* keywords and the words of unknown blocks, keywords included.
+   - $end closes a dump or unknown block. *)
 pre_header_sim:
-  | ID      { () }   (* timestamp (#0) or value token (0!, b1010 …) *)
-  | dump_kw { () }   (* $dump* keyword; its content follows as ID tokens *)
-  | KW_END  { () }   (* $end closing the pre-header dump block *)
-
-dump_kw:
-  | KW_DUMPVARS  { () }
-  | KW_DUMPALL   { () }
-  | KW_DUMPON    { () }
-  | KW_DUMPOFF   { () }
-  | KW_DUMPPORTS { () }
+  | word_token { () }
+  | KW_END     { () }
 
 date_decl:
   | KW_DATE ws = nonempty_list(word_token) KW_END { String.concat " " ws }
@@ -164,7 +156,7 @@ scope_type:
   | SCP_FUNCTION { Function }
   | SCP_BEGIN    { Begin }
   | SCP_FORK     { Fork }
-  | ID           { Module }   (* non-standard: vhdl_architecture, vhdl_record, … *)
+  | s = ID       { Other_scope s }   (* non-standard: struct, vhdl_architecture, … *)
 
 scope_item:
   | v = var_decl      { `Var v }
@@ -172,10 +164,12 @@ scope_item:
   | scope_inner_skip  { `Skip }
 
 (* Skip non-standard blocks that may appear inside a scope, e.g.
-   $attrbegin misc 02 STD_LOGIC 1030 $end from VHDL-aware simulators. *)
+   $attrbegin misc 02 STD_LOGIC 1030 $end from VHDL-aware simulators, and
+   $comment blocks (GTKWave writes FST comments where they occur). *)
 scope_inner_skip:
-  | ID     { () }   (* $attrbegin keyword and its content tokens *)
-  | KW_END { () }   (* $end closing the attribute block *)
+  | word_token { () }   (* $attrbegin keyword and its content tokens *)
+  | KW_COMMENT { () }
+  | KW_END     { () }   (* $end closing the block *)
 
 (* ------------------------------------------------------------------ *)
 (*  $var                                                               *)
@@ -202,3 +196,4 @@ var_type:
   | VT_TRI1      { Tri1 }      | VT_WAND      { Wand }
   | VT_WIRE      { Wire }      | VT_WOR       { Wor }
   | VT_LOGIC     { Logic }     | VT_STRING    { Sstring }
+  | s = ID       { var_type_of_string s }   (* bit, int, …, or Other_type *)

@@ -161,6 +161,8 @@ $end
 b0101 !
 #2
 b10u0 "
+#3
+b1?0 "
 |}
 
 let%expect_test "mixed vectors — Int, Scalars, Bytes, Other" =
@@ -177,7 +179,9 @@ let%expect_test "mixed vectors — Int, Scalars, Bytes, Other" =
     #1
       !=b101
     #2
-      "=b10u0 |}]
+      "=b10u0
+    #3
+      "=b1?0 |}]
 
 let%expect_test "value variant tags" =
   let r = Vcd.parse_string mixed_vcd in
@@ -193,6 +197,8 @@ let%expect_test "value variant tags" =
             | Other _ -> "Other"
             | Scalar _ -> "Scalar"
             | Real _ -> "Real"
+            | Port _ -> "Port"
+            | String _ -> "String"
           in
           Format.printf "%a: %s\n" ID.pp id tag
       | _ -> ())
@@ -202,6 +208,7 @@ let%expect_test "value variant tags" =
     ": Scalars
     #: Int
     !: Int
+    ": Scalars
     ": Other |}]
 
 let%expect_test "Int64 value — 63-bit all-ones" =
@@ -232,6 +239,8 @@ $end
             | Other _ -> "Other"
             | Scalar _ -> "Scalar"
             | Real _ -> "Real"
+            | Port _ -> "Port"
+            | String _ -> "String"
           in
           Format.printf "%a: %s = %a\n" ID.pp id tag Value.pp v
       | _ -> ())

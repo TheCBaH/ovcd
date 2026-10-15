@@ -40,7 +40,12 @@ let parse_header_exn lexbuf =
   | Failure msg -> raise (Parse_error msg)
 
 let events_seq lexbuf =
-  let rec next () = match Vcd_lexer.next_event lexbuf with Some ev -> Seq.Cons (ev, next) | None -> Seq.Nil in
+  let rec next () =
+    match Vcd_lexer.next_event lexbuf with
+    | Some ev -> Seq.Cons (ev, next)
+    | None -> Seq.Nil
+    | exception Failure msg -> raise (Parse_error msg)
+  in
   next
 
 let parse_lexbuf lexbuf =
@@ -272,6 +277,7 @@ let string_of_scope_type = function
   | Vcd_ast.Function -> "function"
   | Vcd_ast.Begin -> "begin"
   | Vcd_ast.Fork -> "fork"
+  | Vcd_ast.Other_scope s -> s
 
 let string_of_var_type = function
   | Vcd_ast.Event -> "event"
@@ -294,3 +300,14 @@ let string_of_var_type = function
   | Vcd_ast.Wor -> "wor"
   | Vcd_ast.Logic -> "logic"
   | Vcd_ast.Sstring -> "string"
+  | Vcd_ast.Bit -> "bit"
+  | Vcd_ast.Byte -> "byte"
+  | Vcd_ast.Enum -> "enum"
+  | Vcd_ast.Int -> "int"
+  | Vcd_ast.Longint -> "longint"
+  | Vcd_ast.Port -> "port"
+  | Vcd_ast.Real_parameter -> "real_parameter"
+  | Vcd_ast.Shortint -> "shortint"
+  | Vcd_ast.Shortreal -> "shortreal"
+  | Vcd_ast.Sparray -> "sparray"
+  | Vcd_ast.Other_type s -> s

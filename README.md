@@ -5,6 +5,11 @@
 Streaming [VCD (Value Change Dump)](https://en.wikipedia.org/wiki/Value_change_dump) parser for OCaml.
 The header is parsed with Menhir; simulation events are streamed as a lazy `Seq.t` via ocamllex.
 
+It reads IEEE 1364 VCD and the extensions GTKWave's `fst2vcd` and Verilator's
+FST traces produce: SystemVerilog `$var` and `$scope` types, IEEE 1164
+9-state values, strings, port values and `$attrbegin` attributes. Extended VCD
+(`$dumpports`) is not supported.
+
 Two command-line tools are included — `vcd_dump` (structural: hierarchy, signal
 listings, raw value stream) and `vcd_tool` (stateful: per-step state and
 relational `--when`/`--show` queries). See the [CLI guide](doc/cli-guide.md) for

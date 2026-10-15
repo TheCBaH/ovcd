@@ -132,4 +132,4 @@ use --summary to avoid 392-line scope tree:
   version:   nvc 1.14-devel
   timescale: 1fs
   scopes:    17  vars: 367
-  events:    1236298 (timestamps: 400075, changes: 836222, dumps: 1, comments: 0)
+  events:    1236307 (timestamps: 400075, changes: 836231, dumps: 1, comments: 0)

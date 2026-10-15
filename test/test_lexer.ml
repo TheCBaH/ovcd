@@ -143,3 +143,43 @@ let%expect_test "comment in simulation section" =
     //hello world
     #1
     !=0 |}]
+
+(* ------------------------------------------------------------------ *)
+(*  SystemVerilog / GTKWave value records                              *)
+(* ------------------------------------------------------------------ *)
+
+let%expect_test "9-state scalars and '?'" =
+  print_string (show_events "u! W\" l# H$ -% ?&");
+  [%expect {|
+    !=u
+    "=w
+    #=l
+    $=h
+    %=-
+    &=b? |}]
+
+let%expect_test "9-state vector" =
+  print_string (show_events "bUX01ZWLH- ! b10?1 \"");
+  [%expect {|
+    !=bux01zwlh-
+    "=b10?1 |}]
+
+let%expect_test "port, string and empty string values" =
+  print_string (show_events "pUDN0 ! sab\\040c \" s # S$ $");
+  [%expect {|
+    !=pUDN0
+    "=sab\040c
+    #=s
+    $=s$ |}]
+
+let%expect_test "unknown $keyword block in the simulation section is skipped" =
+  print_string (show_events "#0 $attrbegin misc 07 wire 1 $end 1! $dumpoff $end");
+  [%expect {|
+    #0
+    !=1
+    $dumpoff
+    $end |}]
+
+let%expect_test "unexpected character reports its line" =
+  (try print_string (show_events "#0\n1!\n  %oops") with Failure msg -> print_string msg);
+  [%expect {| unexpected '%' at line 3 col 2 |}]

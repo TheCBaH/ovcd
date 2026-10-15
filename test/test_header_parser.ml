@@ -142,6 +142,8 @@ let show_value v =
     | Scalars ls -> ("Scalars", String.concat "" (List.map (fun l -> String.make 1 (char_of_logic l)) ls))
     | Other s -> ("Other", s)
     | Real f -> ("Real", string_of_float f)
+    | Port s -> ("Port", s)
+    | String s -> ("String", s)
   in
   Printf.sprintf "%s(%s)" tag body
 
@@ -194,4 +196,93 @@ let%expect_test "parse_vector all-Z" =
 
 let%expect_test "parse_vector 9-state falls to Other" =
   print_string (show_value (parse_vector "10u0"));
-  [%expect {| Other(10u0) |}]
+  [%expect {| Scalars(10u0) |}]
+
+(* ------------------------------------------------------------------ *)
+(*  SystemVerilog / GTKWave declarations                               *)
+(* ------------------------------------------------------------------ *)
+
+let%expect_test "SystemVerilog and GTKWave variable types" =
+  pp_header
+    (parse_header
+       {|$scope module m $end
+$var bit 1 ! a $end
+$var byte 8 " b [7:0] $end
+$var shortint 16 # c $end
+$var int 32 $ d $end
+$var longint 64 % e $end
+$var enum 2 & f $end
+$var shortreal 32 ' g $end
+$var sparray 1 ( h $end
+$var port 4 ) i $end
+$var real_parameter 64 * j $end
+$var mystery 3 + k $end
+$upscope $end
+$enddefinitions $end|});
+  [%expect
+    {|
+    date:      (none)
+    version:   (none)
+    timescale: (none)
+    comment:   (none)
+      scope module m
+        var bit 1 a
+        var byte 8 b [7:0]
+        var shortint 16 c
+        var int 32 d
+        var longint 64 e
+        var enum 2 f
+        var shortreal 32 g
+        var sparray 1 h
+        var port 4 i
+        var real_parameter 64 j
+        var mystery 3 k |}]
+
+let%expect_test "non-1364 scope types are kept" =
+  pp_header
+    (parse_header
+       {|$scope module top $end
+$scope struct pkt $end $var logic 4 ! tag $end $upscope $end
+$scope interface bus_if $end $upscope $end
+$scope sv_array arr $end $upscope $end
+$scope vhdl_architecture rtl $end $upscope $end
+$upscope $end
+$enddefinitions $end|});
+  [%expect
+    {|
+    date:      (none)
+    version:   (none)
+    timescale: (none)
+    comment:   (none)
+      scope module top
+        scope struct pkt
+          var logic 4 tag
+        scope interface bus_if
+        scope sv_array arr
+        scope vhdl_architecture rtl |}]
+
+let%expect_test "comments, attributes and keyword-like words around and inside scopes" =
+  pp_header
+    (parse_header
+       {|$timezero
+	-42
+$end
+$attrbegin misc 01 wire 0 $end
+$scope module m $end
+$comment
+	inside a scope
+$end
+$attrbegin misc 07 module 3 reg begin $end
+$attrbegin array packed arr 4 $end
+$var wire 1 ! a $end
+$attrend $end
+$upscope $end
+$enddefinitions $end|});
+  [%expect
+    {|
+    date:      (none)
+    version:   (none)
+    timescale: (none)
+    comment:   (none)
+      scope module m
+        var wire 1 a |}]

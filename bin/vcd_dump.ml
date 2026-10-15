@@ -25,7 +25,7 @@ let parse_pattern_or_exit r s =
       exit 1
   | Ok pat -> r := (s, pat) :: !r
 
-let () =
+let main () =
   let summary = ref false in
   let bench_runs = ref 0 in
   let resolve = ref false in
@@ -230,3 +230,10 @@ let () =
         end
       end)
     files
+
+(* Value changes are parsed lazily, so their errors surface while iterating. *)
+let () =
+  try main ()
+  with Vcd.Parse_error msg ->
+    Printf.eprintf "parse error: %s\n" msg;
+    exit 1

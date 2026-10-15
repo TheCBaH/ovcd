@@ -36,6 +36,13 @@
   ../test-data/pyDigitalWaveTools/tests/example0.vcd))
 
 (cram
+ (applies_to systemverilog)
+ (deps
+  vcd_dump
+  (glob_files data/fst2vcd/*.vcd)
+  (glob_files data/verilator/*.vcd)))
+
+(cram
  (applies_to icarus synopsys ieee misc resolve)
  (deps
   vcd_dump

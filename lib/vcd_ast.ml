@@ -1,6 +1,13 @@
 open Vcd_types
 
-type scope_type = Module | Task | Function | Begin | Fork
+type scope_type =
+  | Module
+  | Task
+  | Function
+  | Begin
+  | Fork
+  | Other_scope of string
+      (** Any other scope type, as written: e.g. [struct], [interface], [vhdl_architecture], [sv_array] (GTKWave). *)
 
 type var_type =
   | Event
@@ -23,6 +30,32 @@ type var_type =
   | Wor
   | Logic  (** SystemVerilog / VHDL 4-state net *)
   | Sstring  (** SystemVerilog / VHDL string variable *)
+  (* SystemVerilog and GTKWave types, as written by e.g. GTKWave's fst2vcd. *)
+  | Bit
+  | Byte
+  | Enum
+  | Int
+  | Longint
+  | Port
+  | Real_parameter
+  | Shortint
+  | Shortreal
+  | Sparray
+  | Other_type of string  (** Any other type, as written. *)
+
+(** The [var_type] for a type keyword that is not one of the lexer's IEEE 1364 tokens. *)
+let var_type_of_string = function
+  | "bit" -> Bit
+  | "byte" -> Byte
+  | "enum" -> Enum
+  | "int" -> Int
+  | "longint" -> Longint
+  | "port" -> Port
+  | "real_parameter" -> Real_parameter
+  | "shortint" -> Shortint
+  | "shortreal" -> Shortreal
+  | "sparray" -> Sparray
+  | s -> Other_type s
 
 (** Pack a binary string (MSB-first, left-to-right) into a [bytes] value. Within each byte the MSB is bit 7. If
     [len mod 8 <> 0] the last byte is right-padded with zeros. *)
@@ -45,8 +78,8 @@ let pack_bits s len =
     - all digits ['0'|'1'], length <= 24 → [Int]
     - all digits ['0'|'1'], 25..64 → [Int64]
     - all digits ['0'|'1'], > 64 → [Bytes]
-    - all 4-state digits (['0'|'1'|'x'|'X'|'z'|'Z']) → [Scalars]
-    - anything else (9-state, etc.) → [Other]
+    - all IEEE 1164 9-state digits ([0 1 x z u w l h -], either case) → [Scalars]
+    - anything else (e.g. ['?']) → [Other]
 
     The per-event string length is intentionally not stored; look up {!var_decl.size} in the header for the canonical
     signal width. *)
@@ -60,6 +93,9 @@ let parse_vector s =
         (String.fold_left (fun acc c -> Int64.logor (Int64.shift_left acc 1) (Int64.of_int (Char.code c land 1))) 0L s)
     else Bytes (pack_bits s len)
   else try Scalars (List.init len (fun i -> char_to_logic_exn s.[i])) with InvalidLogicChar _ -> Other s
+
+(** A scalar value change: one of the 9-state characters, or ['?'] (kept as [Other]). *)
+let scalar_of_char = function '?' -> Value.Other "?" | c -> Value.Scalar (Value.char_to_logic_exn c)
 
 type var_decl = {
   v_type : var_type;

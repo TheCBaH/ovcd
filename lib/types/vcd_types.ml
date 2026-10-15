@@ -33,10 +33,21 @@ module Reference = struct
 end
 
 module Value = struct
-  (** 4-state logic value. [B0] = drive-0, [B1] = drive-1, [X] = unknown, [Z] = high-impedance. *)
-  type logic = B0 | B1 | X | Z
+  (** IEEE 1164 9-state logic value. [B0] = drive-0, [B1] = drive-1, [X] = unknown, [Z] = high-impedance, [U] =
+      uninitialised, [W] = weak unknown, [L] = weak 0, [H] = weak 1, [Dont_care] = ['-']. *)
+  type logic = B0 | B1 | X | Z | U | W | L | H | Dont_care
 
-  let char_of_logic = function B0 -> '0' | B1 -> '1' | X -> 'x' | Z -> 'z'
+  let char_of_logic = function
+    | B0 -> '0'
+    | B1 -> '1'
+    | X -> 'x'
+    | Z -> 'z'
+    | U -> 'u'
+    | W -> 'w'
+    | L -> 'l'
+    | H -> 'h'
+    | Dont_care -> '-'
+
   let pp_logic fmt l = Format.pp_print_char fmt (char_of_logic l)
 
   exception InvalidLogicChar of char
@@ -46,6 +57,11 @@ module Value = struct
     | '1' -> B1
     | 'x' | 'X' -> X
     | 'z' | 'Z' -> Z
+    | 'u' | 'U' -> U
+    | 'w' | 'W' -> W
+    | 'l' | 'L' -> L
+    | 'h' | 'H' -> H
+    | '-' -> Dont_care
     | c -> raise (InvalidLogicChar c)
 
   (** Maximum bit-width stored as a native [int] in the [Int] variant. *)
@@ -53,16 +69,18 @@ module Value = struct
 
   (** Decoded value for a bus/vector signal. *)
   type t =
-    | Scalar of logic  (** Single-bit 4-state value. *)
+    | Scalar of logic  (** Single-bit value. *)
     | Int of int
         (** All-0/1 vector that fits in a portable OCaml [int] (<= [int_bits] = 24 bits). Canonical bit width is in
             {!var_decl.size}. *)
     | Int64 of int64
         (** All-0/1 vector of 25..64 bits, held as an [int64]. Canonical bit width is in {!var_decl.size}. *)
     | Bytes of bytes  (** All-0/1 vector wider than 64 bits, packed MSB-first into [bytes]. *)
-    | Scalars of logic list  (** 4-state vector containing at least one [X] or [Z] bit. *)
-    | Other of string  (** 9-state or unrecognised vector (raw bit string kept verbatim). *)
+    | Scalars of logic list  (** Vector containing at least one bit other than [B0] and [B1]. *)
+    | Other of string  (** Unrecognised value, e.g. a ['?'] bit (raw text kept verbatim). *)
     | Real of float  (** Floating-point real value (from [r…] VCD records). *)
+    | Port of string  (** Port value from a [p<value> <id>] record, as GTKWave's fst2vcd writes it, kept verbatim. *)
+    | String of string  (** String value from an [s…] record, escapes kept as written. *)
 
   let to_string = function
     | Scalar l -> String.make 1 (char_of_logic l)
@@ -106,6 +124,8 @@ module Value = struct
         Buffer.contents buf
     | Other s -> "b" ^ s
     | Real f -> string_of_float f
+    | Port s -> "p" ^ s
+    | String s -> "s" ^ s
 
   let to_string_hex size = function
     | Scalar l -> String.make 1 (char_of_logic l)
@@ -119,7 +139,7 @@ module Value = struct
         Buffer.add_char buf 'h';
         Bytes.iter (fun c -> Buffer.add_string buf (Printf.sprintf "%02x" (Char.code c))) b;
         Buffer.contents buf
-    | (Scalars _ | Other _) as v -> to_string v
+    | (Scalars _ | Other _ | Port _ | String _) as v -> to_string v
     | Real f -> string_of_float f
 
   let zero = Int 0
@@ -141,6 +161,7 @@ module Value = struct
     | Scalar B0 -> 0
     | Scalar B1 -> 1
     | Scalar (X | Z) -> invalid_arg "Value.get_int_exn: X/Z value"
+    | Scalar (U | W | L | H | Dont_care) -> invalid_arg "Value.get_int_exn: 9-state value"
     | Int n -> n
     | Int64 n ->
         if n >= 0L && n <= Int64.of_int max_int then Int64.to_int n
@@ -149,6 +170,7 @@ module Value = struct
     | Scalars _ -> invalid_arg "Value.get_int_exn: X/Z value"
     | Other _ -> invalid_arg "Value.get_int_exn: 9-state or unrecognised value"
     | Real _ -> invalid_arg "Value.get_int_exn: real value"
+    | Port _ | String _ -> invalid_arg "Value.get_int_exn: port or string value"
   [@@ai_disclosure "ai-generated"]
 
   let get_bool_exn v = get_int_exn v <> 0 [@@ai_disclosure "ai-generated"]
@@ -163,12 +185,14 @@ module Value = struct
     | Scalar B0 -> 0L
     | Scalar B1 -> 1L
     | Scalar (X | Z) -> invalid_arg "Value.get_int64_exn: X/Z value"
+    | Scalar (U | W | L | H | Dont_care) -> invalid_arg "Value.get_int64_exn: 9-state value"
     | Int n -> Int64.of_int n
     | Int64 n -> n
     | Bytes _ -> invalid_arg "Value.get_int64_exn: value too wide for int64"
     | Scalars _ -> invalid_arg "Value.get_int64_exn: X/Z value"
     | Other _ -> invalid_arg "Value.get_int64_exn: 9-state or unrecognised value"
     | Real _ -> invalid_arg "Value.get_int64_exn: real value"
+    | Port _ | String _ -> invalid_arg "Value.get_int64_exn: port or string value"
   [@@ai_disclosure "ai-generated"]
 
   let get_int64 ?(default = 0L) v = match get_int64_exn v with exception Invalid_argument _ -> default | n -> n
@@ -182,6 +206,7 @@ module Value = struct
     | Scalar B0 -> 0
     | Scalar B1 -> if byte_idx = 0 then 1 else 0
     | Scalar (X | Z) -> invalid_arg "Value.get_byte_exn: X/Z value"
+    | Scalar (U | W | L | H | Dont_care) -> invalid_arg "Value.get_byte_exn: 9-state value"
     | Int n ->
         let shift = byte_idx * 8 in
         if shift >= Sys.int_size then 0 else (n lsr shift) land 0xFF
@@ -194,6 +219,7 @@ module Value = struct
     | Scalars _ -> invalid_arg "Value.get_byte_exn: X/Z value"
     | Other _ -> invalid_arg "Value.get_byte_exn: 9-state or unrecognised value"
     | Real _ -> invalid_arg "Value.get_byte_exn: real value"
+    | Port _ | String _ -> invalid_arg "Value.get_byte_exn: port or string value"
   [@@ai_disclosure "ai-generated"]
 
   let get_byte ?(default = 0) v byte_idx =

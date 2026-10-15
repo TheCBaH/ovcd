@@ -104,7 +104,7 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       end)
     events
 
-let () =
+let main () =
   let ranges = ref [] in
   let patterns = ref [] in
   let regexes = ref [] in
@@ -237,3 +237,10 @@ let () =
           events
       end)
     files
+
+(* Value changes are parsed lazily, so their errors surface while iterating. *)
+let () =
+  try main ()
+  with Vcd.Parse_error msg ->
+    Printf.eprintf "parse error: %s\n" msg;
+    exit 1

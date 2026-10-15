@@ -38,8 +38,10 @@ module Reference : sig
 end
 
 module Value : sig
-  (** 4-state logic value. [B0] = drive-0, [B1] = drive-1, [X] = unknown, [Z] = high-impedance. *)
-  type logic = B0 | B1 | X | Z
+  (** IEEE 1164 9-state logic value. [B0] = drive-0, [B1] = drive-1, [X] = unknown, [Z] = high-impedance, [U] =
+      uninitialised, [W] = weak unknown, [L] = weak 0, [H] = weak 1, [Dont_care] = ['-']. Characters are accepted in
+      either case and printed in lower case. *)
+  type logic = B0 | B1 | X | Z | U | W | L | H | Dont_care
 
   val char_of_logic : logic -> char
   val pp_logic : Format.formatter -> logic -> unit
@@ -53,23 +55,25 @@ module Value : sig
 
   (** Decoded value for a bus/vector signal. *)
   type t =
-    | Scalar of logic  (** Single-bit 4-state value. *)
+    | Scalar of logic  (** Single-bit value. *)
     | Int of int
         (** All-0/1 vector that fits in a portable OCaml [int] (<= [int_bits] = 24 bits). Canonical bit width is in
             {!Vcd_ast.var_decl.size}. *)
     | Int64 of int64
         (** All-0/1 vector of 25..64 bits, held as an [int64]. Canonical bit width is in {!Vcd_ast.var_decl.size}. *)
     | Bytes of bytes  (** All-0/1 vector wider than 64 bits, packed MSB-first into [bytes]. *)
-    | Scalars of logic list  (** 4-state vector containing at least one [X] or [Z] bit. *)
-    | Other of string  (** 9-state or unrecognised vector (raw bit string kept verbatim). *)
+    | Scalars of logic list  (** Vector containing at least one bit other than [B0] and [B1]. *)
+    | Other of string  (** Unrecognised value, e.g. a ['?'] bit (raw text kept verbatim). *)
     | Real of float  (** Floating-point real value (from [r…] VCD records). *)
+    | Port of string  (** Port value from a [p<value> <id>] record, as GTKWave's fst2vcd writes it, kept verbatim. *)
+    | String of string  (** String value from an [s…] record, escapes kept as written. *)
 
   val to_string : t -> string
 
   val to_string_hex : int -> t -> string
   (** Like [to_string] but prints multi-bit numeric values ([Int], [Int64], [Bytes]) in hexadecimal with [h] prefix,
-      zero-padded to the width implied by [size]. [Scalar], [Scalars], [Other], and [Real] are unchanged. Pass the
-      signal's declared bit-width as [size]. *)
+      zero-padded to the width implied by [size]. Other values print as with [to_string]. Pass the signal's declared
+      bit-width as [size]. *)
 
   val pp : Format.formatter -> t -> unit
   val zero : t
@@ -85,8 +89,8 @@ module Value : sig
   val bytes : bytes -> t
 
   val get_int_exn : t -> int
-  (** [get_int_exn v] returns the full integer value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
-      wider than a native [int], is a [Real], or is an [Other] value. *)
+  (** [get_int_exn v] returns the full integer value of [v]. Raises [Invalid_argument] if [v] has bits other than 0/1,
+      is wider than a native [int], is a [Real], or is an [Other], [Port] or [String] value. *)
 
   val get_bool_exn : t -> bool
   (** [get_bool_exn v] returns [false] if [v] is zero, [true] otherwise. Raises [Invalid_argument] under the same
@@ -99,16 +103,16 @@ module Value : sig
   (** [get_bool v] returns the boolean value of [v], or [default] (default [false]) if {!get_bool_exn} would raise. *)
 
   val get_int64_exn : t -> int64
-  (** [get_int64_exn v] returns the full [int64] value of [v]. Raises [Invalid_argument] if [v] contains X/Z bits, is
-      wider than 64 bits ([Bytes]), is a [Real], or is an [Other] value. *)
+  (** [get_int64_exn v] returns the full [int64] value of [v]. Raises [Invalid_argument] if [v] has bits other than 0/1,
+      is wider than 64 bits ([Bytes]), is a [Real], or is an [Other], [Port] or [String] value. *)
 
   val get_int64 : ?default:int64 -> t -> int64
   (** [get_int64 v] returns the [int64] value of [v], or [default] (default [0L]) if {!get_int64_exn} would raise. *)
 
   val get_byte_exn : t -> int -> int
   (** [get_byte_exn v byte_idx] returns the byte covering bits [byte_idx*8+7 : byte_idx*8] (LSB = bit 0) as an integer
-      in 0..255. Returns 0 for [byte_idx] beyond the payload width (zero-fill). Raises [Invalid_argument] for X/Z,
-      [Real], or [Other] values, and for negative [byte_idx]. *)
+      in 0..255. Returns 0 for [byte_idx] beyond the payload width (zero-fill). Raises [Invalid_argument] for non-0/1
+      bits, [Real], [Other], [Port] or [String] values, and for negative [byte_idx]. *)
 
   val get_byte : ?default:int -> t -> int -> int
   (** [get_byte v byte_idx] returns the byte value, or [default] (default [0]) if {!get_byte_exn} would raise. *)
@@ -116,7 +120,7 @@ module Value : sig
   val get_bits_exn : t -> lo:int -> hi:int -> int
   (** [get_bits_exn v ~lo ~hi] extracts bits [[hi:lo]] (LSB = bit 0, inclusive) as an unsigned [int]. Bits beyond the
       payload width are zero-filled. Raises [Invalid_argument] if the range is invalid, wider than [int_bits] bits, or
-      the value contains X/Z bits, is a [Real], or is an [Other] value. *)
+      the value has bits other than 0/1, is a [Real], or is an [Other], [Port] or [String] value. *)
 
   val get_bits : ?default:int -> t -> lo:int -> hi:int -> int
   (** [get_bits v ~lo ~hi] extracts bits [[hi:lo]] as an unsigned [int], or [default] (default [0]) if {!get_bits_exn}
@@ -125,7 +129,7 @@ module Value : sig
   val get_bits64_exn : t -> lo:int -> hi:int -> int64
   (** [get_bits64_exn v ~lo ~hi] extracts bits [[hi:lo]] (LSB = bit 0, inclusive) as an unsigned [int64]. Bits beyond
       the payload width are zero-filled. Raises [Invalid_argument] if the range is invalid, wider than 64 bits, or the
-      value contains X/Z bits, is a [Real], or is an [Other] value. *)
+      value has bits other than 0/1, is a [Real], or is an [Other], [Port] or [String] value. *)
 
   val get_bits64 : ?default:int64 -> t -> lo:int -> hi:int -> int64
   (** [get_bits64 v ~lo ~hi] extracts bits [[hi:lo]] as an unsigned [int64], or [default] (default [0L]) if

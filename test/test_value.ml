@@ -258,3 +258,38 @@ let%expect_test "get_bits64_exn: errors" =
 [@@@ai_disclosure "ai-generated"]
 [@@@ai_model "claude-sonnet-4-6"]
 [@@@ai_provider "Anthropic"]
+
+(* ------------------------------------------------------------------ *)
+(*  9-state logic, port and string values                              *)
+(* ------------------------------------------------------------------ *)
+
+let%expect_test "9-state characters round-trip in lower case" =
+  String.iter (fun c -> print_char (char_of_logic (char_to_logic_exn c))) "01xXzZuUwWlLhH-";
+  print_newline ();
+  (try ignore (char_to_logic_exn '?') with InvalidLogicChar c -> Printf.printf "InvalidLogicChar %C\n" c);
+  [%expect {|
+    01xxzzuuwwllhh-
+    InvalidLogicChar '?' |}]
+
+let%expect_test "weak and uninitialised states have no integer value" =
+  List.iter (fun l -> exn (fun () -> Value.get_int_exn (Scalar l))) [ U; W; L; H; Dont_care ];
+  exn (fun () -> Value.get_int64_exn (Port "UDN0"));
+  exn (fun () -> Value.get_byte_exn (String "idle") 0);
+  [%expect
+    {|
+    Value.get_int_exn: 9-state value
+    Value.get_int_exn: 9-state value
+    Value.get_int_exn: 9-state value
+    Value.get_int_exn: 9-state value
+    Value.get_int_exn: 9-state value
+    Value.get_int64_exn: port or string value
+    Value.get_byte_exn: port or string value |}]
+
+let%expect_test "to_string of port and string values" =
+  print_endline (Value.to_string (Port "UDN0"));
+  print_endline (Value.to_string (String "a\\040b"));
+  print_endline (Value.to_string_hex 4 (Port "UDN0"));
+  [%expect {|
+    pUDN0
+    sa\040b
+    pUDN0 |}]

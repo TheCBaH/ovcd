@@ -67,6 +67,14 @@
     byte c1 c2 c3 c4 c5 c6 c7 c8 lsl 8 lor byte c9 c10 c11 c12 c13 c14 c15 c16
 
   let mkid = Vcd_types.ID.of_string
+
+  let newlines lexbuf s = String.iter (fun c -> if c = '\n' then Lexing.new_line lexbuf) s
+
+  let unexpected lexbuf c =
+    let p = Lexing.lexeme_start_p lexbuf in
+    let file = if p.Lexing.pos_fname = "" then "" else p.Lexing.pos_fname ^ " " in
+    failwith
+      (Printf.sprintf "unexpected %C at %sline %d col %d" c file p.Lexing.pos_lnum (p.Lexing.pos_cnum - p.Lexing.pos_bol))
 }
 
 (* ------------------------------------------------------------------ *)
@@ -75,11 +83,10 @@
 let white   = [' ' '\t' '\r' '\n']
 let digit   = ['0'-'9']
 
-(* 4-state logic chars used in scalar value changes *)
-let scalarchar = ['0' '1' 'x' 'X' 'z' 'Z']
-
-(* IEEE 1364/1800 extended vector chars: 4-state + 9-state + don't-care *)
-let vecchar = ['0' '1' 'x' 'X' 'z' 'Z' 'u' 'U' 'w' 'W' 'l' 'L' 'h' 'H' '-']
+(* IEEE 1164 9-state chars, plus the '?' GTKWave writes for unknown states *)
+let scalarchar = ['0' '1' 'x' 'X' 'z' 'Z' 'u' 'U' 'w' 'W' 'l' 'L' 'h' 'H' '-' '?']
+let vecchar = scalarchar
+let blank = [' ' '\t' '\r']
 
 let bin_pfx = ['b' 'B']
 let digit_01 = ['0' '1']
@@ -91,7 +98,8 @@ let word    = idchar+
 (*  Header lexer — produces tokens consumed by Menhir                 *)
 (* ------------------------------------------------------------------ *)
 rule token = parse
-  | white+  { token lexbuf }
+  | '\n'    { Lexing.new_line lexbuf; token lexbuf }
+  | blank+  { token lexbuf }
   | word    { lookup_or_id (Lexing.lexeme lexbuf) }
   | eof     { Vcd_parser.EOF }
   | _       { token lexbuf }
@@ -100,7 +108,7 @@ rule token = parse
 (*  Free-text collector: reads words until $end, returns trimmed text *)
 (* ------------------------------------------------------------------ *)
 and collect_text buf = parse
-  | white+         { Buffer.add_char buf ' '; collect_text buf lexbuf }
+  | white+ as w    { newlines lexbuf w; Buffer.add_char buf ' '; collect_text buf lexbuf }
   | "$end"         { String.trim (Buffer.contents buf) }
   | word as w      { Buffer.add_string buf w; collect_text buf lexbuf }
   | eof            { failwith "unexpected EOF inside keyword block" }
@@ -111,15 +119,17 @@ and collect_text buf = parse
 (*  Returns one event per call, or None at end-of-file.               *)
 (* ------------------------------------------------------------------ *)
 and next_event = parse
-  | white+
+  | '\n'
+      { Lexing.new_line lexbuf; next_event lexbuf }
+  | blank+
       { next_event lexbuf }
 
   | '#' (digit+ as n)
       { Some (Vcd_ast.Timestamp (Vcd_types.Timestamp.of_string n)) }
 
-  (* Scalar: 4-state logic char immediately followed by id chars (no space) *)
+  (* Scalar: logic char immediately followed by id chars (no space) *)
   | (scalarchar as v) (idchar+ as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.Scalar (Vcd_types.Value.char_to_logic_exn v))) }
+      { Some (Vcd_ast.Change (mkid id, Vcd_ast.scalar_of_char v)) }
 
   (* All-0/1 vector fast paths — no String.length, no branch, no loop.
      Specific-length rules must precede the general rule so they win the
@@ -223,9 +233,13 @@ and next_event = parse
         in
         Some (Vcd_ast.Change (mkid id, v)) }
 
-  (* State string (SystemC/UVM): s<name> <id> — kept as Other *)
-  | ['s' 'S'] (idchar+ as s) white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.Other s)) }
+  (* String: s<text> <id>, possibly empty (SystemC/UVM state names, GTKWave strings) *)
+  | ['s' 'S'] (idchar* as s) white+ (word as id)
+      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.String s)) }
+
+  (* Port value as GTKWave's fst2vcd writes it: p<value> <id> *)
+  | ['p' 'P'] (idchar+ as v) white+ (word as id)
+      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.Port v)) }
 
   (* $end terminates a dump block *)
   | "$end"
@@ -243,5 +257,9 @@ and next_event = parse
         let text = collect_text buf lexbuf in
         Some (Vcd_ast.SimComment text) }
 
+  (* Any other $keyword: skip its block up to $end *)
+  | '$' idchar+
+      { ignore (collect_text (Buffer.create 64) lexbuf); next_event lexbuf }
+
   | eof   { None }
-  | _     { next_event lexbuf }
+  | _ as c { unexpected lexbuf c }
