@@ -7,7 +7,7 @@ The header is parsed with Menhir; simulation events are streamed as a lazy `Seq.
 
 It reads IEEE 1364 VCD and the extensions GTKWave's `fst2vcd` and Verilator's
 FST traces produce: SystemVerilog `$var` and `$scope` types, IEEE 1164
-9-state values, strings, port values and `$attrbegin` attributes. Extended VCD
+9-state values, strings, port values, `$attrbegin` attributes and `$timezero`. Extended VCD
 (`$dumpports`) is not supported.
 
 Two command-line tools are included — `vcd_dump` (structural: hierarchy, signal

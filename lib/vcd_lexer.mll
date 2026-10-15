@@ -8,6 +8,7 @@
     "$upscope",          KW_UPSCOPE;
     "$var",              KW_VAR;
     "$timescale",        KW_TIMESCALE;
+    "$timezero",         KW_TIMEZERO;
     "$date",             KW_DATE;
     "$version",          KW_VERSION;
     "$comment",          KW_COMMENT;

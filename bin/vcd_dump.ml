@@ -203,6 +203,7 @@ let main () =
           Printf.printf "date:      %s\n" (opt Fun.id h.date);
           Printf.printf "version:   %s\n" (opt Fun.id h.version);
           Printf.printf "timescale: %s\n" (opt Fun.id h.timescale);
+          Option.iter (Printf.printf "timezero:  %Ld\n") h.timezero;
           if !summary then begin
             let ns, nv = count_scopes_and_vars h.scopes in
             Printf.printf "scopes:    %d  vars: %d\n" ns nv

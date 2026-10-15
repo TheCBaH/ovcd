@@ -1,0 +1,29 @@
+$date
+	Wed Oct 14 12:00:00 2026
+
+$end
+$version
+	fst_ref a2
+$end
+$timezero
+	-42
+$end
+$timescale
+	1ns
+$end
+$scope function f $end
+$var wire 1 ! a $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpvars
+0!
+$end
+#7
+1!
+#14
+0!
+#21
+1!
+#28
+0!

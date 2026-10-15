@@ -16,4 +16,5 @@ same bytes), with SystemVerilog `$var` types and enum `$attrbegin` records.
 `fst2vcd/kitchen.vcd`: every construct libfst's VCD writer produces (9-state
 values, strings, port values, SystemVerilog and VHDL scope and variable types,
 attributes, comments, blackouts), from ocaml-fst's `test/reference/fst_ref.c`
-(`a2_kitchen_z.ext.vcd`, written and read by libfst `5186181`).
+(`a2_kitchen_z.ext.vcd`, written and read by libfst `5186181`). `fst2vcd/timezero.vcd`
+is the same reference's `a2_timezero.vcd`, a small trace with `$timezero -42`.

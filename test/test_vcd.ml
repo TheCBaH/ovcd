@@ -21,6 +21,7 @@ let parse s =
   Format.printf "version:   %s\n" (Option.value ~default:"(none)" h.version);
   Format.printf "date:      %s\n" (Option.value ~default:"(none)" h.date);
   Format.printf "timescale: %s\n" (Option.value ~default:"(none)" h.timescale);
+  Option.iter (Format.printf "timezero:  %Ld\n") h.timezero;
   let rec pp_scope ind s =
     Format.printf "%s[%s] %s\n" ind (Vcd.string_of_scope_type s.s_type) s.s_name;
     List.iter (fun v -> Format.printf "%s  %s %s id=%a\n" ind (Vcd.string_of_var_type v.v_type) v.ref ID.pp v.id) s.vars;

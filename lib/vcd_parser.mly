@@ -14,17 +14,19 @@
     let version   = ref None in
     let date      = ref None in
     let timescale = ref None in
+    let timezero  = ref None in
     let comment   = ref None in
     let scopes    = ref [] in
     List.iter (function
       | `Version v   -> version   := Some v
       | `Date d      -> date      := Some d
       | `Timescale t -> timescale := Some t
+      | `Timezero t  -> timezero  := Some t
       | `Comment c   -> comment   := Some c
       | `Scope s     -> scopes    := s :: !scopes
       | `Skip        -> ())
       decls;
-    { version = !version; date = !date; timescale = !timescale;
+    { version = !version; date = !date; timescale = !timescale; timezero = !timezero;
       comment = !comment; scopes = List.rev !scopes }
 %}
 
@@ -34,7 +36,7 @@
 
 %token KW_END KW_ENDDEFS
 %token KW_SCOPE KW_UPSCOPE KW_VAR
-%token KW_TIMESCALE KW_DATE KW_VERSION KW_COMMENT
+%token KW_TIMESCALE KW_TIMEZERO KW_DATE KW_VERSION KW_COMMENT
 %token KW_DUMPVARS KW_DUMPALL KW_DUMPON KW_DUMPOFF KW_DUMPPORTS
 
 %token SCP_MODULE SCP_TASK SCP_FUNCTION SCP_BEGIN SCP_FORK
@@ -71,6 +73,7 @@ declaration:
   | d  = date_decl      { `Date d }
   | v  = version_decl   { `Version v }
   | ts = timescale_decl { `Timescale ts }
+  | tz = timezero_decl  { `Timezero tz }
   | c  = comment_decl   { `Comment c }
   | s  = scope_decl     { `Scope s }
   | pre_header_sim      { `Skip }
@@ -91,6 +94,13 @@ date_decl:
 
 version_decl:
   | KW_VERSION ws = nonempty_list(word_token) KW_END { String.concat " " ws }
+
+(* GTKWave's time offset: a signed integer in timescale units. *)
+timezero_decl:
+  | KW_TIMEZERO w = word_token KW_END
+      { match Int64.of_string_opt w with
+        | Some t -> t
+        | None   -> failwith ("invalid $timezero: " ^ w) }
 
 timescale_decl:
   | KW_TIMESCALE ws = nonempty_list(word_token) KW_END { String.concat " " ws }

@@ -118,6 +118,18 @@ values:
     top.clk=0
   $end
 
+A non-zero time offset, which fst2vcd writes as $timezero:
+
+  $ ./vcd_dump data/fst2vcd/timezero.vcd
+  file:      timezero.vcd
+  date:      Wed Oct 14 12:00:00 2026
+  version:   fst_ref a2
+  timescale: 1ns
+  timezero:  -42
+  scope function f
+    var wire 1 a
+  events:    11 (timestamps: 5, changes: 5, dumps: 1, comments: 0)
+
 An unexpected character in the value changes is an error with its position,
 not skipped:
 

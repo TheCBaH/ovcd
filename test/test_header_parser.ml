@@ -20,6 +20,7 @@ let pp_header h =
   Format.printf "date:      %s\n" (show_opt Fun.id h.date);
   Format.printf "version:   %s\n" (show_opt Fun.id h.version);
   Format.printf "timescale: %s\n" (show_opt Fun.id h.timescale);
+  Option.iter (Format.printf "timezero:  %Ld\n") h.timezero;
   Format.printf "comment:   %s\n" (show_opt Fun.id h.comment);
   List.iter (pp_scope "  ") h.scopes
 
@@ -283,6 +284,44 @@ $enddefinitions $end|});
     date:      (none)
     version:   (none)
     timescale: (none)
+    timezero:  -42
     comment:   (none)
       scope module m
         var wire 1 a |}]
+
+(* ------------------------------------------------------------------ *)
+(*  $timezero                                                          *)
+(* ------------------------------------------------------------------ *)
+
+let%expect_test "negative timezero, as GTKWave writes it" =
+  pp_header (parse_header "$timezero\n\t-42\n$end\n$timescale\n\t1ns\n$end\n$enddefinitions $end");
+  [%expect
+    {|
+    date:      (none)
+    version:   (none)
+    timescale: 1ns
+    timezero:  -42
+    comment:   (none) |}]
+
+let%expect_test "positive timezero after other declarations" =
+  pp_header (parse_header "$version fst_ref $end $timescale 1ps $end $timezero 100 $end $enddefinitions $end");
+  [%expect
+    {|
+    date:      (none)
+    version:   fst_ref
+    timescale: 1ps
+    timezero:  100
+    comment:   (none) |}]
+
+let%expect_test "no timezero" =
+  print_endline
+    (match (parse_header "$timescale 1ps $end $enddefinitions $end").timezero with
+    | None -> "None"
+    | Some t -> Int64.to_string t);
+  [%expect {| None |}]
+
+let%expect_test "a timezero that is not an integer is a parse error" =
+  (match Vcd.parse_string "$timezero soon $end $enddefinitions $end" with
+  | _ -> print_endline "parsed"
+  | exception Vcd.Parse_error msg -> print_endline msg);
+  [%expect {| invalid $timezero: soon |}]

@@ -111,6 +111,9 @@ type header = {
   version : string option;
   date : string option;
   timescale : string option;
+  timezero : int64 option;
+      (** GTKWave's [$timezero]: the offset, in timescale units, of the time that timestamps count from. The absolute
+          time of a timestamp [t] is [t + timezero]. *)
   comment : string option;
   scopes : scope_node list;
 }
