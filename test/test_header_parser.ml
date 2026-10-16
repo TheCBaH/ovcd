@@ -325,3 +325,29 @@ let%expect_test "a timezero that is not an integer is a parse error" =
   | _ -> print_endline "parsed"
   | exception Vcd.Parse_error msg -> print_endline msg);
   [%expect {| invalid $timezero: soon |}]
+
+let%expect_test "var_type_of_keyword and scope_type_of_keyword agree with the parser" =
+  let var_types =
+    [ "event"; "integer"; "parameter"; "real"; "real_parameter"; "reg"; "supply0"; "supply1"; "time"; "tri";
+      "triand"; "trior"; "trireg"; "tri0"; "tri1"; "wand"; "wire"; "wor"; "port"; "sparray"; "realtime"; "string";
+      "bit"; "logic"; "int"; "shortint"; "longint"; "byte"; "enum"; "shortreal"; "custom" ]
+  [@@ocamlformat "disable"]
+  in
+  let scope_types = [ "module"; "task"; "function"; "begin"; "fork"; "struct"; "vhdl_architecture"; "sv_array" ] in
+  List.iter
+    (fun kw ->
+      let h =
+        parse_header (Printf.sprintf "$scope module m $end $var %s 1 ! a $end $upscope $end $enddefinitions $end" kw)
+      in
+      match h.scopes with
+      | [ { vars = [ v ]; _ } ] when v.v_type = var_type_of_keyword kw -> ()
+      | _ -> Printf.printf "var type %s differs\n" kw)
+    var_types;
+  List.iter
+    (fun kw ->
+      let h = parse_header (Printf.sprintf "$scope %s m $end $upscope $end $enddefinitions $end" kw) in
+      match h.scopes with
+      | [ s ] when s.s_type = scope_type_of_keyword kw -> ()
+      | _ -> Printf.printf "scope type %s differs\n" kw)
+    scope_types;
+  [%expect {| |}]

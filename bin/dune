@@ -2,4 +2,4 @@
  (names vcd_dump vcd_tool)
  (public_names vcd_dump vcd_tool)
  (package ovcd)
- (libraries ovcd vcd_util vcd_filter re))
+ (libraries ovcd re vcd_filter vcd_fst vcd_util))

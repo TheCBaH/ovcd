@@ -10,7 +10,7 @@ name: dune vendored install
 # resolves ovcd, vcd_util, and vcd_filter from the local source rather than
 # opam.
 #
-# External dependencies that cannot be vendored (menhir build tool, re library)
+# External dependencies that are not vendored (menhir build tool, re library, fst)
 # are installed via opam.
 
 on:
@@ -54,12 +54,6 @@ jobs:
           ocaml-compiler: "4.14"
           opam-pin: false
 
-      # Install only the external build-time deps that ovcd requires when
-      # built from source (menhir parser generator, re regex library).
-      # ovcd itself is NOT installed — it comes from the vendored subtree.
-      - name: install vendored build deps
-        run: opam install menhir re -y
-
       # Fetch the ovcd source archive for the exact commit under test and
       # unpack it into .github/workflows/consumer/vendored/ovcd/ so dune treats it as a
       # vendored dependency (.github/workflows/consumer/dune has (vendored_dirs vendored)).
@@ -72,8 +66,21 @@ jobs:
             | tar -xz -C .github/workflows/consumer/vendored/
           mv .github/workflows/consumer/vendored/ovcd-${SHA} .github/workflows/consumer/vendored/ovcd
 
+      # Install only the external deps that ovcd requires when built from
+      # source (menhir parser generator, re regex library, fst), pinning what
+      # the vendored ovcd.opam pins. ovcd itself is NOT installed — it comes
+      # from the vendored subtree.
+      - name: install vendored build deps
+        run: |
+          sed -n 's/^ *\["\([a-z0-9_-]*\)\.dev" "\(git+[^"]*\)"\]$/\1 \2/p' \
+            .github/workflows/consumer/vendored/ovcd/ovcd.opam |
+            while read -r pkg url; do opam pin add -n -y "$pkg.dev" "$url"; done
+          opam install menhir re fst -y
+
       - name: build consumer with vendored ovcd
         run: opam exec -- dune build --root .github/workflows/consumer
 
       - name: run consumer with vendored ovcd
-        run: opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.vcd
+        run: |
+          opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.vcd
+          opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.fst

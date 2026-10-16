@@ -57,6 +57,39 @@ let var_type_of_string = function
   | "sparray" -> Sparray
   | s -> Other_type s
 
+(** The [var_type] for any [$var] type keyword, as the parser maps it. *)
+let var_type_of_keyword = function
+  | "event" -> Event
+  | "integer" -> Integer
+  | "parameter" -> Parameter
+  | "real" -> Real
+  | "realtime" -> Realtime
+  | "reg" -> Reg
+  | "supply0" -> Supply0
+  | "supply1" -> Supply1
+  | "time" -> Time
+  | "tri" -> Tri
+  | "triand" -> Triand
+  | "trior" -> Trior
+  | "trireg" -> Trireg
+  | "tri0" -> Tri0
+  | "tri1" -> Tri1
+  | "wand" -> Wand
+  | "wire" -> Wire
+  | "wor" -> Wor
+  | "logic" -> Logic
+  | "string" -> Sstring
+  | s -> var_type_of_string s
+
+(** The [scope_type] for any [$scope] type keyword, as the parser maps it. *)
+let scope_type_of_keyword = function
+  | "module" -> Module
+  | "task" -> Task
+  | "function" -> Function
+  | "begin" -> Begin
+  | "fork" -> Fork
+  | s -> Other_scope s
+
 (** Pack a binary string (MSB-first, left-to-right) into a [bytes] value. Within each byte the MSB is bit 7. If
     [len mod 8 <> 0] the last byte is right-padded with zeros. *)
 let pack_bits s len =
@@ -93,6 +126,19 @@ let parse_vector s =
         (String.fold_left (fun acc c -> Int64.logor (Int64.shift_left acc 1) (Int64.of_int (Char.code c land 1))) 0L s)
     else Bytes (pack_bits s len)
   else try Scalars (List.init len (fun i -> char_to_logic_exn s.[i])) with InvalidLogicChar _ -> Other s
+
+(** The digits of a [b] record as the lexer decodes them: all-0/1 digits are an [Int] up to [int_bits], an [Int64] up to
+    64 bits (both through the {!Value.int} and {!Value.int64} constructors), [Bytes] beyond; anything else goes through
+    {!parse_vector}. *)
+let binary_value s =
+  let n = String.length s in
+  if n > 0 && String.for_all (fun c -> c = '0' || c = '1') s then
+    if n <= Value.int_bits then Value.int (String.fold_left (fun acc c -> (acc lsl 1) lor (Char.code c - 48)) 0 s)
+    else if n <= 64 then
+      Value.int64
+        (String.fold_left (fun acc c -> Int64.logor (Int64.shift_left acc 1) (Int64.of_int (Char.code c land 1))) 0L s)
+    else Value.bytes (pack_bits s n)
+  else parse_vector s
 
 (** A scalar value change: one of the 9-state characters, or ['?'] (kept as [Other]). *)
 let scalar_of_char = function '?' -> Value.Other "?" | c -> Value.Scalar (Value.char_to_logic_exn c)

@@ -49,7 +49,7 @@ let () =
         "SPEC  Restrict to a time range, e.g. \"0-500\" or \"...1000\" (may be repeated)" );
     ]
   in
-  let usage = "usage: vcd_info [--signal PATTERN]... [--signal-re REGEX]... [--range SPEC]... <file.vcd>..." in
+  let usage = "usage: vcd_info [--signal PATTERN]... [--signal-re REGEX]... [--range SPEC]... <file.vcd|file.fst>..." in
   Arg.parse spec (fun f -> files := f :: !files) usage;
   let files = List.rev !files in
   let patterns = List.rev !patterns in
@@ -61,7 +61,7 @@ let () =
   List.iter
     (fun path ->
       let r =
-        match Vcd.parse_file path with
+        match Vcd_fst.open_file path with
         | r -> r
         | exception Vcd.Parse_error msg ->
             Printf.eprintf "parse error: %s\n" msg;

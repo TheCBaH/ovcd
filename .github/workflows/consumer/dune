@@ -2,4 +2,4 @@
 
 (executable
  (name vcd_info)
- (libraries ovcd ovcd.vcd_types ovcd.vcd_util ovcd.vcd_filter re))
+ (libraries ovcd ovcd.fst ovcd.vcd_filter ovcd.vcd_types ovcd.vcd_util re))

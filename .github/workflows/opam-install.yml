@@ -75,7 +75,9 @@ jobs:
         run: opam exec -- dune build --root .github/workflows/consumer
 
       - name: run consumer application
-        run: opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.vcd
+        run: |
+          opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.vcd
+          opam exec -- ./.github/workflows/consumer/_build/default/vcd_info.exe .github/workflows/consumer/sim.fst
 
       - name: install ovcd with tests
         run: opam install ovcd --with-test -y

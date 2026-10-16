@@ -78,7 +78,7 @@ let main () =
   in
   let usage =
     "usage: vcd_dump [--summary] [--bench N] [--resolve] [--strip] [--range SPEC]... [--signal PATTERN]... \
-     [--signal-re REGEX]... [--list-signals PATTERN]... <file.vcd>"
+     [--signal-re REGEX]... [--list-signals PATTERN]... <file.vcd|file.fst>"
   in
   Arg.parse spec (fun f -> files := f :: !files) usage;
   let files = List.rev !files in
@@ -95,7 +95,7 @@ let main () =
   List.iter
     (fun path ->
       let parse () =
-        match Vcd.parse_file path with
+        match Vcd_fst.open_file path with
         | r -> r
         | exception Vcd.Parse_error msg ->
             Printf.eprintf "parse error: %s\n" msg;

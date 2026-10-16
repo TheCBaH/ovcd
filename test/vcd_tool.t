@@ -1,7 +1,7 @@
 No arguments — print usage to stderr and exit 1:
 
   $ ./vcd_tool 2>&1; echo "exit:$?"
-  usage: vcd_tool [--range SPEC]... [--signal PATTERN]... [--signal-re REGEX]... [--strip] [--when PATTERN=VALUE --show PATTERNS [--lookback N]]... <file.vcd>...
+  usage: vcd_tool [--range SPEC]... [--signal PATTERN]... [--signal-re REGEX]... [--strip] [--when PATTERN=VALUE --show PATTERNS [--lookback N]]... <file.vcd|file.fst>...
     --range SPEC  Restrict to a time range, e.g. "...1000" or "0-500" or "2000-..."; may be repeated
     --signal PATTERN  Show only signals matching this DSL pattern (may be repeated)
     --signal-re REGEX  Show only signals whose full name matches this PCRE regex (may be repeated)

@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
+make deps             # install opam dependencies, pinning fst and unlz4
 make                  # build
 make test             # run all tests
 make update-tests     # run tests and auto-promote expected outputs
@@ -28,7 +29,9 @@ Two-phase parsing: the **header** is parsed eagerly by Menhir and produces `Vcd_
 
 `Vcd.Resolver` maps between IDs and hierarchical references using two balanced-tree maps (`By_id` for forward lookup, `By_ref` for reverse). `entry` is opaque — use `entry_id` / `entry_reference` or `fold`. For aliased signals (same ID in multiple scopes), `By_id` retains the deepest scope's entry while `By_ref` stores every path independently.
 
-The public API is `lib/vcd.ml` / `lib/vcd.mli`. Everything else in `lib/` is internal.
+FST input is `lib/fst/vcd_fst.ml` (library `ovcd.fst`, on [ocaml-fst](https://github.com/TheCBaH/ocaml-fst)): it builds the same `Vcd.parse_result` from an FST, decoding one FST block per pull, and must match parsing `fst2vcd -e` output (`test/fst.t`, `test/fst_equal.ml`). `Vcd_fst.open_file` picks VCD or FST by content; the tools use it.
+
+The public API is `lib/vcd.ml` / `lib/vcd.mli` and `lib/fst/vcd_fst.mli`. Everything else in `lib/` is internal.
 
 ## Tests
 

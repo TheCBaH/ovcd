@@ -4,6 +4,10 @@ default:
 test:
 	opam exec -- dune runtest test/
 
+# Honours ovcd.opam's pin-depends (fst, unlz4).
+deps:
+	opam install . --deps-only -y
+
 format:
 	opam exec dune fmt
 
@@ -47,4 +51,4 @@ benchmark:
 	echo "  -- filter: **.{clk,tx} (glob + alternation)"; \
 	$(TIME) $$TOOL --signal '**.{clk,tx}' test-data/go-vcd-parser/vcd/files/samples/tb.vcd > /dev/null
 
-.PHONY: default clean format utop test update-tests benchmark
+.PHONY: default clean deps format utop test update-tests benchmark

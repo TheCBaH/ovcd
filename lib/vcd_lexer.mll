@@ -206,21 +206,7 @@ and next_event = parse
      String.length is unavoidable here; ocamllex cannot count in a pattern.
      <= 24 → Int, 25..64 → Int64, > 64 → Bytes. *)
   | bin_pfx (digit_01 digit_01+ as bits) white+ (word as id)
-      { let n = String.length bits in
-        let value =
-          if n <= Vcd_types.Value.int_bits then
-            Vcd_types.Value.int
-              (String.fold_left
-                 (fun acc c -> (acc lsl 1) lor (Char.code c - 48)) 0 bits)
-          else if n <= 64 then
-            Vcd_types.Value.int64
-              (String.fold_left
-                 (fun acc c -> Int64.logor (Int64.shift_left acc 1)
-                                 (Int64.of_int (Char.code c land 1))) 0L bits)
-          else
-            Vcd_types.Value.bytes (Vcd_ast.pack_bits bits n)
-        in
-        Some (Vcd_ast.Change (mkid id, value)) }
+      { Some (Vcd_ast.Change (mkid id, Vcd_ast.binary_value bits)) }
 
   (* 4-state / 9-state slow path (x, z, u, …). *)
   | bin_pfx (vecchar+ as bits) white+ (word as id)

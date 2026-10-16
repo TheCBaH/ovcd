@@ -1,0 +1,6 @@
+(library
+ (name vcd_fst)
+ (public_name ovcd.fst)
+ (wrapped false)
+ (modules vcd_fst)
+ (libraries fst ovcd vcd_types))

@@ -10,6 +10,12 @@ FST traces produce: SystemVerilog `$var` and `$scope` types, IEEE 1164
 9-state values, strings, port values, `$attrbegin` attributes and `$timezero`. Extended VCD
 (`$dumpports`) is not supported.
 
+FST files are read natively too, through
+[ocaml-fst](https://github.com/TheCBaH/ocaml-fst): `Vcd_fst.open_file`
+(library `ovcd.fst`) tells FST from VCD by content and returns the same
+header and lazy event stream as `fst2vcd -e` followed by `Vcd.parse_file`,
+decoding one FST block at a time. Both tools accept either format.
+
 Two command-line tools are included — `vcd_dump` (structural: hierarchy, signal
 listings, raw value stream) and `vcd_tool` (stateful: per-step state and
 relational `--when`/`--show` queries). See the [CLI guide](doc/cli-guide.md) for

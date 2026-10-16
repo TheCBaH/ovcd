@@ -15,6 +15,16 @@
  (preprocess
   (pps ppx_expect ppx_inline_test)))
 
+(executable
+ (name fst_equal)
+ (modules fst_equal)
+ (libraries ovcd vcd_fst vcd_types))
+
+(rule
+ (target fst_equal)
+ (action
+  (copy %{exe:fst_equal.exe} %{target})))
+
 (rule
  (target vcd_dump)
  (action
@@ -34,6 +44,15 @@
   ; pyDigitalWaveTools
   ../test-data/pyDigitalWaveTools/tests/AxiRegTC_test_write.vcd
   ../test-data/pyDigitalWaveTools/tests/example0.vcd))
+
+(cram
+ (applies_to fst)
+ (deps
+  fst_equal
+  vcd_dump
+  vcd_tool
+  (glob_files data/fst2vcd/*)
+  (glob_files data/verilator/*)))
 
 (cram
  (applies_to systemverilog)

@@ -18,3 +18,9 @@ values, strings, port values, SystemVerilog and VHDL scope and variable types,
 attributes, comments, blackouts), from ocaml-fst's `test/reference/fst_ref.c`
 (`a2_kitchen_z.ext.vcd`, written and read by libfst `5186181`). `fst2vcd/timezero.vcd`
 is the same reference's `a2_timezero.vcd`, a small trace with `$timezero -42`.
+
+`kitchen.fst` and `timezero.fst` are the FST files those VCDs come from
+(`a2_kitchen_z.fst`, `a2_timezero.fst`). `repack.fst` (`a2_repack.fst`) is the
+kitchen trace at 1 ps, gzip-wrapped by libfst's repack-on-close (first byte
+`0xFE`); `repack.vcd` is its `a2_repack.ext.vcd`.
+`test/fst.t` checks that each FST parses to its VCD.
