@@ -350,3 +350,24 @@ let%expect_test "aliased signal — reported filter by ID covers all aliases" =
     t=10
       state: !=1
       changes: !=0 |}]
+
+(* ------------------------------------------------------------------ *)
+(*  Selected parsing                                                    *)
+(* ------------------------------------------------------------------ *)
+
+let%test "stream of a selected parse = tracked stream of the full parse, for every subset" =
+  let ids = [ "!"; "\""; "#"; "$"; "%" ] in
+  let subsets = List.fold_left (fun acc id -> acc @ List.map (fun s -> id :: s) acc) [ [] ] ids in
+  let show s =
+    List.of_seq (Seq.map (fun e -> (e.time, Vcd.ID_map.bindings e.state, Vcd.ID_map.bindings e.changes)) s)
+  in
+  List.for_all
+    (fun vcd ->
+      List.for_all
+        (fun sub ->
+          let select id = List.mem (ID.to_string id) sub in
+          let selected = stream (Vcd.parse_string ~select vcd).simulation in
+          let tracked = stream ~tracked:(id_set sub) (stream_of vcd) in
+          sub = [] || show selected = show tracked)
+        subsets)
+    [ counter_vcd; dumpall_vcd ]

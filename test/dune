@@ -7,6 +7,7 @@
   test_header_parser
   test_lexer
   test_range
+  test_select
   test_stateful
   test_value
   test_vcd)

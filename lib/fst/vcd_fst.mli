@@ -22,14 +22,17 @@ val detect_string : string -> format
 val detect_file : string -> format
 (** {!detect_string} on the first bytes of a file. Raises [Sys_error] if it cannot be read. *)
 
-val parse_string : string -> Vcd.parse_result
-(** Parse an FST held in memory. Raises {!Vcd.Parse_error}. *)
+val parse_string : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
+(** Parse an FST held in memory. Raises {!Vcd.Parse_error}.
 
-val parse_file : string -> Vcd.parse_result
+    [select] is as in {!Vcd.parse_string}: the first pull calls it once per distinct ID, and the changes of unselected
+    IDs are neither decompressed nor made into events. *)
+
+val parse_file : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 (** Parse an FST file by path. Raises {!Vcd.Parse_error}, or [Sys_error] if it cannot be opened. *)
 
-val open_string : string -> Vcd.parse_result
+val open_string : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 (** {!parse_string} or {!Vcd.parse_string}, as {!detect_string} decides. *)
 
-val open_file : string -> Vcd.parse_result
+val open_file : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 (** {!parse_file} or {!Vcd.parse_file}, as {!detect_file} decides. *)

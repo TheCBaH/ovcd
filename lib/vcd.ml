@@ -39,29 +39,56 @@ let parse_header_exn lexbuf =
               (pos.Lexing.pos_cnum - pos.Lexing.pos_bol)))
   | Failure msg -> raise (Parse_error msg)
 
-let events_seq lexbuf =
+(* The selected IDs among those the header declares, each asked once, on the first pull. *)
+let selection header select =
+  let asked = Hashtbl.create 1024 and kept = Hashtbl.create 1024 in
+  let rec walk (s : Vcd_ast.scope_node) =
+    List.iter
+      (fun (v : Vcd_ast.var_decl) ->
+        let k = Vcd_types.ID.to_string v.id in
+        if not (Hashtbl.mem asked k) then begin
+          Hashtbl.replace asked k ();
+          if select v.id then Hashtbl.replace kept k ()
+        end)
+      s.vars;
+    List.iter walk s.children
+  in
+  List.iter walk header.Vcd_ast.scopes;
+  Hashtbl.mem kept
+
+let events_seq ?select header lexbuf =
+  let chosen = ref None in
   let rec next () =
-    match Vcd_lexer.next_event lexbuf with
+    let keep =
+      match (!chosen, select) with
+      | Some k, _ -> k
+      | None, None -> Fun.const true
+      | None, Some f ->
+          let k = selection header f in
+          chosen := Some k;
+          k
+    in
+    match Vcd_lexer.next_selected keep lexbuf with
     | Some ev -> Seq.Cons (ev, next)
     | None -> Seq.Nil
     | exception Failure msg -> raise (Parse_error msg)
   in
   next
 
-let parse_lexbuf lexbuf =
+let parse_lexbuf ?select lexbuf =
   let header = parse_header_exn lexbuf in
-  { header; simulation = events_seq lexbuf }
+  { header; simulation = events_seq ?select header lexbuf }
 
 (* ------------------------------------------------------------------ *)
 (*  Public API                                                         *)
 (* ------------------------------------------------------------------ *)
 
-let parse_string s = parse_lexbuf (make_lexbuf_from_string s)
-let parse_channel ic = parse_lexbuf (make_lexbuf_from_channel ic)
+let parse_string ?select s = parse_lexbuf ?select (make_lexbuf_from_string s)
+let parse_channel ?select ic = parse_lexbuf ?select (make_lexbuf_from_channel ic)
 
-let parse_file path =
+let parse_file ?select path =
   let lexbuf, _ic = make_lexbuf_from_file path in
-  parse_lexbuf lexbuf
+  parse_lexbuf ?select lexbuf
 
 (* ------------------------------------------------------------------ *)
 (*  Shared key-indexed containers                                     *)

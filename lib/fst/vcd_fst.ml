@@ -104,7 +104,7 @@ let definitions t =
       Ok (header, arr !ids, arr !ports)
 
 (* Events in the order, and with the [$dumpvars] and [$dumpon]/[$dumpoff] placement, of fst2vcd's output. *)
-let events t ~error ~ids ~ports =
+let events ?select t ~error ~ids ~ports =
   let q = Queue.create () in
   let push e = Queue.push e q in
   let id h = if h >= 1 && h <= Array.length ids then ids.(h - 1) else Vcd_types.ID.of_string (Fst.Vcd.id h) in
@@ -151,7 +151,7 @@ let events t ~error ~ids ~ports =
       varlen = (fun h s off len -> push (Change (id h, Value.String (Fst.Vcd.escape s off len))));
     }
   in
-  match Fst.reader t sink with
+  match Fst.reader ?select:(Option.map (fun f h -> f (id h)) select) t sink with
   | Error e -> raise (error e)
   | Ok r ->
       let rec next () =
@@ -167,7 +167,7 @@ let events t ~error ~ids ~ports =
       in
       next
 
-let parse ~name opened =
+let parse ?select ~name opened =
   let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)) in
   match opened with
   | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
@@ -179,9 +179,13 @@ let parse ~name opened =
       in
       match definitions t with
       | Error e -> raise (error e)
-      | Ok (header, ids, ports) -> { Vcd.header; simulation = events t ~error ~ids ~ports })
+      | Ok (header, ids, ports) -> { Vcd.header; simulation = events ?select t ~error ~ids ~ports })
 
-let parse_string s = parse ~name:"<string>" (Fst.of_string s)
-let parse_file path = parse ~name:path (Fst.open_file path)
-let open_string s = match detect_string s with `Fst -> parse_string s | `Vcd -> Vcd.parse_string s
-let open_file path = match detect_file path with `Fst -> parse_file path | `Vcd -> Vcd.parse_file path
+let parse_string ?select s = parse ?select ~name:"<string>" (Fst.of_string s)
+let parse_file ?select path = parse ?select ~name:path (Fst.open_file path)
+
+let open_string ?select s =
+  match detect_string s with `Fst -> parse_string ?select s | `Vcd -> Vcd.parse_string ?select s
+
+let open_file ?select path =
+  match detect_file path with `Fst -> parse_file ?select path | `Vcd -> Vcd.parse_file ?select path

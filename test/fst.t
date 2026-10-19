@@ -37,3 +37,18 @@ A truncated FST is a parse error:
   $ ./vcd_dump cut.fst
   parse error: cut.fst: fst: malformed input: block length 830 (offset 330)
   [1]
+
+With a selection, FST and VCD keep the same changes, and ask about each ID once:
+
+  $ ./fst_equal data/verilator/sv_types.fst data/verilator/sv_types.fst2vcd.vcd 2
+  11 IDs asked once, 5 selected
+  147 events
+  $ ./fst_equal data/fst2vcd/kitchen.fst data/fst2vcd/kitchen.vcd 3
+  19 IDs asked once, 6 selected
+  882 events
+  $ ./fst_equal data/fst2vcd/repack.fst data/fst2vcd/repack.vcd 1
+  19 IDs asked once, 19 selected
+  2105 events
+  $ ./fst_equal data/fst2vcd/repack.fst data/fst2vcd/repack.vcd 1000000
+  19 IDs asked once, 0 selected
+  407 events

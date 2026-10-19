@@ -19,15 +19,20 @@ type parse_result = {
   simulation : Vcd_ast.event Seq.t;  (** Lazy sequence of simulation events; evaluated on demand. *)
 }
 
-val parse_string : string -> parse_result
-(** Parse a VCD document from an in-memory string. *)
+val parse_string : ?select:(Vcd_types.ID.t -> bool) -> string -> parse_result
+(** Parse a VCD document from an in-memory string.
 
-val parse_channel : in_channel -> parse_result
-(** Parse from an already-open [in_channel]. *)
+    With [select], the simulation has only the [Change] events of selected IDs; every other event stays. [select] is not
+    called while the header is parsed: the first pull from the simulation calls it once for each distinct ID the header
+    declares, and that decides the selection for the whole sequence. Changes of IDs the header does not declare are
+    dropped. Unselected changes are still lexed, but no value is made of them. *)
 
-val parse_file : string -> parse_result
+val parse_channel : ?select:(Vcd_types.ID.t -> bool) -> in_channel -> parse_result
+(** Parse from an already-open [in_channel]. [select] is as in {!parse_string}. *)
+
+val parse_file : ?select:(Vcd_types.ID.t -> bool) -> string -> parse_result
 (** Parse a VCD file by path. The simulation [Seq.t] is lazy; the file handle is left open until the sequence is fully
-    consumed or the caller discards it. *)
+    consumed or the caller discards it. [select] is as in {!parse_string}. *)
 
 module ID_map : Map.S with type key = Vcd_types.ID.t
 (** Map keyed on signal identifiers. *)

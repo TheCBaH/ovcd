@@ -84,6 +84,6 @@ dev-repo: "git+https://github.com/TheCBaH/ovcd.git"
 # fst and its unlz4 dependency are not in opam-repository yet; pin-depends is
 # not transitive, so both are pinned here.
 pin-depends: [
-  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#e709ec7f63b1ce092b84ae9edffabb54370fc4cf"]
+  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#804e00817c671ce78bc3a9153a63951992781f8f"]
   ["unlz4.dev" "git+https://github.com/TheCBaH/ocaml-unlz4.git#f5446abf9a4ce4beb92b02ee958f345a6c8171bd"]
 ]

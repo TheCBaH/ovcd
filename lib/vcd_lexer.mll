@@ -119,18 +119,18 @@ and collect_text buf = parse
 (*  Simulation-section step lexer                                      *)
 (*  Returns one event per call, or None at end-of-file.               *)
 (* ------------------------------------------------------------------ *)
-and next_event = parse
+and next_selected keep = parse
   | '\n'
-      { Lexing.new_line lexbuf; next_event lexbuf }
+      { Lexing.new_line lexbuf; next_selected keep lexbuf }
   | blank+
-      { next_event lexbuf }
+      { next_selected keep lexbuf }
 
   | '#' (digit+ as n)
       { Some (Vcd_ast.Timestamp (Vcd_types.Timestamp.of_string n)) }
 
   (* Scalar: logic char immediately followed by id chars (no space) *)
   | (scalarchar as v) (idchar+ as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_ast.scalar_of_char v)) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_ast.scalar_of_char v)) }
 
   (* All-0/1 vector fast paths — no String.length, no branch, no loop.
      Specific-length rules must precede the general rule so they win the
@@ -138,30 +138,30 @@ and next_event = parse
 
   (* 1 bit: b0 and b1 in one rule *)
   | bin_pfx (digit_01 as c) white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (bit c))) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (bit c))) }
 
   (* 2 bits *)
   | bin_pfx (digit_01 as c1) (digit_01 as c2)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
             bit c1 lsl 1 lor bit c2))) }
 
   (* 3 bits *)
   | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
             bit c1 lsl 2 lor bit c2 lsl 1 lor bit c3))) }
 
   (* 4 bits *)
   | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3) (digit_01 as c4)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (nibble c1 c2 c3 c4))) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (nibble c1 c2 c3 c4))) }
 
   (* 8 bits *)
   | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3) (digit_01 as c4)
             (digit_01 as c5) (digit_01 as c6) (digit_01 as c7) (digit_01 as c8)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (byte c1 c2 c3 c4 c5 c6 c7 c8))) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (byte c1 c2 c3 c4 c5 c6 c7 c8))) }
 
   (* 16 bits → Int (2^16−1 = 65535, fits in any OCaml int) *)
   | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
@@ -169,7 +169,7 @@ and next_event = parse
             (digit_01 as c9)  (digit_01 as c10) (digit_01 as c11) (digit_01 as c12)
             (digit_01 as c13) (digit_01 as c14) (digit_01 as c15) (digit_01 as c16)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
             int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16))) }
 
   (* 24 bits → Int (2^24−1 = 16 777 215, still fits in the 31-bit minimum OCaml int) *)
@@ -180,7 +180,7 @@ and next_event = parse
             (digit_01 as c17) (digit_01 as c18) (digit_01 as c19) (digit_01 as c20)
             (digit_01 as c21) (digit_01 as c22) (digit_01 as c23) (digit_01 as c24)
             white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
             int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 lsl 8 lor
             byte c17 c18 c19 c20 c21 c22 c23 c24))) }
 
@@ -194,7 +194,7 @@ and next_event = parse
             (digit_01 as c25) (digit_01 as c26) (digit_01 as c27) (digit_01 as c28)
             (digit_01 as c29) (digit_01 as c30) (digit_01 as c31) (digit_01 as c32)
             white+ (word as id)
-      { let hi = int16 c1  c2  c3  c4  c5  c6  c7  c8
+      { if not (keep id) then next_selected keep lexbuf else let hi = int16 c1  c2  c3  c4  c5  c6  c7  c8
                          c9  c10 c11 c12 c13 c14 c15 c16 in
         let lo = int16 c17 c18 c19 c20 c21 c22 c23 c24
                        c25 c26 c27 c28 c29 c30 c31 c32 in
@@ -206,15 +206,15 @@ and next_event = parse
      String.length is unavoidable here; ocamllex cannot count in a pattern.
      <= 24 → Int, 25..64 → Int64, > 64 → Bytes. *)
   | bin_pfx (digit_01 digit_01+ as bits) white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_ast.binary_value bits)) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_ast.binary_value bits)) }
 
   (* 4-state / 9-state slow path (x, z, u, …). *)
   | bin_pfx (vecchar+ as bits) white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_ast.parse_vector bits)) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_ast.parse_vector bits)) }
 
   (* Vector real: r<float> <id> *)
   | ['r' 'R'] ([^ ' ' '\t' '\r' '\n']+ as r) white+ (word as id)
-      { let v = match float_of_string_opt r with
+      { if not (keep id) then next_selected keep lexbuf else let v = match float_of_string_opt r with
           | Some f -> Vcd_types.Value.Real f
           | None   -> Vcd_types.Value.Other r
         in
@@ -222,11 +222,11 @@ and next_event = parse
 
   (* String: s<text> <id>, possibly empty (SystemC/UVM state names, GTKWave strings) *)
   | ['s' 'S'] (idchar* as s) white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.String s)) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.String s)) }
 
   (* Port value as GTKWave's fst2vcd writes it: p<value> <id> *)
   | ['p' 'P'] (idchar+ as v) white+ (word as id)
-      { Some (Vcd_ast.Change (mkid id, Vcd_types.Value.Port v)) }
+      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.Port v)) }
 
   (* $end terminates a dump block *)
   | "$end"
@@ -246,7 +246,11 @@ and next_event = parse
 
   (* Any other $keyword: skip its block up to $end *)
   | '$' idchar+
-      { ignore (collect_text (Buffer.create 64) lexbuf); next_event lexbuf }
+      { ignore (collect_text (Buffer.create 64) lexbuf); next_selected keep lexbuf }
 
   | eof   { None }
   | _ as c { unexpected lexbuf c }
+
+{
+  let next_event lexbuf = next_selected (fun _ -> true) lexbuf
+}
