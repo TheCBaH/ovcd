@@ -187,6 +187,12 @@ let%expect_test "parse_vector 65 bits (first Bytes)" =
   print_string (show_value (parse_vector s));
   [%expect {| Bytes(<9B>) |}]
 
+let%expect_test "parse_vector 70 bits, right-aligned" =
+  let v = parse_vector ("11" ^ String.make 64 '0' ^ "0101") in
+  let open Vcd_types.Value in
+  Printf.printf "%02x %02x %s\n" (get_byte_exn v 8) (get_byte_exn v 0) (to_string_hex 70 v);
+  [%expect {| 30 05 h300000000000000005 |}]
+
 let%expect_test "parse_vector with X" =
   print_string (show_value (parse_vector "10x0"));
   [%expect {| Scalars(10x0) |}]

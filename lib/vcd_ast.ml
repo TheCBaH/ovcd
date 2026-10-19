@@ -91,14 +91,15 @@ let scope_type_of_keyword = function
   | s -> Other_scope s
 
 (** Pack a binary string (MSB-first, left-to-right) into a [bytes] value. Within each byte the MSB is bit 7. If
-    [len mod 8 <> 0] the last byte is right-padded with zeros. *)
+    [len mod 8 <> 0] the first byte is left-padded with zeros, so the bytes are the value as a big-endian number. *)
 let pack_bits s len =
   let nbytes = (len + 7) / 8 in
+  let pad = (nbytes * 8) - len in
   let buf = Bytes.make nbytes '\x00' in
   for i = 0 to len - 1 do
     if s.[i] = '1' then begin
-      let byte_idx = i / 8 in
-      let bit_pos = 7 - (i mod 8) in
+      let byte_idx = (i + pad) / 8 in
+      let bit_pos = 7 - ((i + pad) mod 8) in
       Bytes.set buf byte_idx (Char.chr (Char.code (Bytes.get buf byte_idx) lor (1 lsl bit_pos)))
     end
   done;

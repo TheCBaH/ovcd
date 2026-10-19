@@ -76,7 +76,7 @@ module Value = struct
             {!var_decl.size}. *)
     | Int64 of int64
         (** All-0/1 vector of 25..64 bits, held as an [int64]. Canonical bit width is in {!var_decl.size}. *)
-    | Bytes of bytes  (** All-0/1 vector wider than 64 bits, packed MSB-first into [bytes]. *)
+    | Bytes of bytes  (** All-0/1 vector wider than 64 bits, as a big-endian number (leading pad bits zero). *)
     | Scalars of logic list  (** Vector containing at least one bit other than [B0] and [B1]. *)
     | Other of string  (** Unrecognised value, e.g. a ['?'] bit (raw text kept verbatim). *)
     | Real of float  (** Floating-point real value (from [r…] VCD records). *)
