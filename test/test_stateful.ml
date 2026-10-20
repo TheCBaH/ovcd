@@ -355,6 +355,88 @@ let%expect_test "aliased signal — reported filter by ID covers all aliases" =
 (*  Selected parsing                                                    *)
 (* ------------------------------------------------------------------ *)
 
+(* ------------------------------------------------------------------ *)
+(*  init                                                                *)
+(* ------------------------------------------------------------------ *)
+
+(* No $dumpvars: a stream that starts after the beginning. *)
+let resumed_vcd =
+  {|
+$timescale 1ns $end
+$scope module tb $end
+$var wire 1 ! a $end
+$var wire 1 " b $end
+$upscope $end
+$enddefinitions $end
+#5
+1!
+#10
+0!
+|}
+
+(* & is not declared: init may hold any ID. *)
+let init_map =
+  List.fold_left
+    (fun m (id, v) -> Vcd.ID_map.add (ID.of_string id) (Value.int v) m)
+    Vcd.ID_map.empty
+    [ ("!", 0); ("\"", 1); ("&", 1) ]
+
+let%expect_test "init — without filters every entry is kept" =
+  Seq.iter pp_event (stream ~init:init_map (stream_of resumed_vcd));
+  [%expect
+    {|
+    t=5
+      state: !=b0 "=b1 &=b1
+      changes: !=1
+    t=10
+      state: !=1 "=b1 &=b1
+      changes: !=0 |}]
+
+let%expect_test "init — tracked drops the entries outside it" =
+  Seq.iter pp_event (stream ~init:init_map ~tracked:(id_set [ "!" ]) (stream_of resumed_vcd));
+  [%expect {|
+    t=5
+      state: !=b0
+      changes: !=1
+    t=10
+      state: !=1
+      changes: !=0 |}]
+
+let%expect_test "init — reported drops the entries outside it, and tracked ∪ reported keeps both" =
+  Seq.iter pp_event (stream ~init:init_map ~reported:(id_set [ "!" ]) (stream_of resumed_vcd));
+  Seq.iter pp_event
+    (stream ~init:init_map ~tracked:(id_set [ "!" ]) ~reported:(id_set [ "\"" ]) (stream_of resumed_vcd));
+  [%expect
+    {|
+    t=5
+      state: !=b0
+      changes: !=1
+    t=10
+      state: !=1
+      changes: !=0
+    t=5
+      state: !=b0 "=b1
+      changes: !=1
+    t=10
+      state: !=1 "=b1
+      changes: !=0 |}]
+
+let%expect_test "init — a range entry's snapshot holds only the effective set" =
+  Seq.iter pp_event
+    (stream ~init:init_map ~tracked:(id_set [ "!" ]) ~ranges:[ range ~start:(ts "10") () ] (stream_of resumed_vcd));
+  [%expect {|
+    t=10
+      state: !=1
+      changes: !=0 |}]
+
+let%test "init defaults to the empty state" =
+  let show s =
+    List.of_seq (Seq.map (fun e -> (e.time, Vcd.ID_map.bindings e.state, Vcd.ID_map.bindings e.changes)) s)
+  in
+  List.for_all
+    (fun vcd -> show (stream (stream_of vcd)) = show (stream ~init:Vcd.ID_map.empty (stream_of vcd)))
+    [ counter_vcd; dumpall_vcd; resumed_vcd ]
+
 let%test "stream of a selected parse = tracked stream of the full parse, for every subset" =
   let ids = [ "!"; "\""; "#"; "$"; "%" ] in
   let subsets = List.fold_left (fun acc id -> acc @ List.map (fun s -> id :: s) acc) [ [] ] ids in

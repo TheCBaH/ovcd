@@ -274,7 +274,7 @@ module Stateful = struct
 
   type event = { state : state; time : Vcd_types.Timestamp.t; changes : state }
 
-  let stream ?tracked ?reported ?(ranges : time_range list = []) events =
+  let stream ?tracked ?reported ?(init : state = ID_map.empty) ?(ranges : time_range list = []) events =
     let ids =
       match (tracked, reported) with
       | None, None -> None
@@ -314,7 +314,7 @@ module Stateful = struct
               Seq.Cons ({ state; time = t; changes = effective_changes }, loop in_range new_state next_t remaining)
             else loop in_range new_state next_t remaining ()
     in
-    match collect false ID_map.empty ID_map.empty events with
+    match collect false (ID_map.filter (fun id _ -> in_ids id) init) ID_map.empty events with
     | _, _, `Nil -> Fun.const Seq.Nil
     | pre_state, _, `Timestamp (first_t, first_events) -> loop false pre_state first_t first_events
 end

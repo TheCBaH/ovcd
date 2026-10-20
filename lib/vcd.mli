@@ -108,7 +108,13 @@ module Stateful : sig
             so that the consumer sees values that changed while the stream was outside the range. *)
   }
 
-  val stream : ?tracked:ID_set.t -> ?reported:ID_set.t -> ?ranges:time_range list -> Vcd_ast.event Seq.t -> event Seq.t
+  val stream :
+    ?tracked:ID_set.t ->
+    ?reported:ID_set.t ->
+    ?init:state ->
+    ?ranges:time_range list ->
+    Vcd_ast.event Seq.t ->
+    event Seq.t
   (** Build a stateful sequence from a simulation event stream.
 
       The {e effective ID set} is [tracked ∪ reported] when both are given, or whichever is given when only one is, or
@@ -116,6 +122,10 @@ module Stateful : sig
 
       Produces one {!event} per timestep where [event.changes] is non-empty.
 
+      @param init
+        The state before the first event, for a stream that starts after the beginning of the simulation (see
+        [Vcd_fst.open_at]); defaults to empty. Entries outside the effective ID set are dropped, so the restriction
+        above holds for it too.
       @param tracked IDs to include in the effective set.
       @param reported Additional IDs to include in the effective set.
       @param ranges
