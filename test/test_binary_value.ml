@@ -63,3 +63,32 @@ let%test "digits at the width boundaries" =
         (fun s -> Vcd_ast.binary_value s = Old.binary_value s)
         [ String.make n '0'; String.make n '1'; "1" ^ String.make (n - 1) '0'; String.make (n - 1) '0' ^ "1" ])
     [ 1; 2; 23; 24; 25; 31; 32; 33; 62; 63; 64; 65; 72; 128 ]
+
+(* The digits packed as FST stores them: MSB first, from the top of the first byte. *)
+let fst_packed digits =
+  let w = String.length digits in
+  let b = Bytes.make ((w + 7) / 8) '\000' in
+  String.iteri
+    (fun i c ->
+      if c = '1' then Bytes.set b (i / 8) (Char.chr (Char.code (Bytes.get b (i / 8)) lor (0x80 lsr (i land 7)))))
+    digits;
+  b
+
+let%test "packed_value equals binary_value of the digits, widths 2..130" =
+  let st = Random.State.make [| 20261021 |] in
+  let ok = ref true in
+  for w = 2 to 130 do
+    for k = 0 to 40 do
+      let digits =
+        match k with
+        | 0 -> String.make w '0'
+        | 1 -> String.make w '1'
+        | _ -> String.init w (fun _ -> if Random.State.bool st then '1' else '0')
+      in
+      (* Also from an offset, with junk around the vector. *)
+      let b = fst_packed digits in
+      let padded = Bytes.cat (Bytes.make 3 '\xa5') (Bytes.cat b (Bytes.make 2 '\x5a')) in
+      if Vcd_ast.packed_value padded 3 w <> Vcd_ast.binary_value digits then ok := false
+    done
+  done;
+  !ok

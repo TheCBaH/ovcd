@@ -151,7 +151,17 @@ let events ?select t ~error ~ids ~ports =
       varlen = (fun h s off len -> push (Change (id h, Value.String (Fst.Vcd.escape s off len))));
     }
   in
-  match Fst.reader ?select:(Option.map (fun f h -> f (id h)) select) t sink with
+  let packed h b off width =
+    let v =
+      if port h then
+        Value.Port
+          (String.init width (fun j ->
+               if (Char.code (Bytes.get b (off + (j lsr 3))) lsr (7 - (j land 7))) land 1 = 1 then '1' else '0'))
+      else packed_value b off width
+    in
+    push (Change (id h, v))
+  in
+  match Fst.reader ?select:(Option.map (fun f h -> f (id h)) select) ~packed t sink with
   | Error e -> raise (error e)
   | Ok r ->
       let rec next () =
