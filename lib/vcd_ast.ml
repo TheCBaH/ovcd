@@ -166,6 +166,36 @@ let binary_value s =
       end
     with Not_binary -> parse_vector s
 
+(** The [width] digits packed MSB first from [off] in [b] (as FST stores 0/1 vectors: the last byte's low bits unused),
+    as {!binary_value} of the digits would give them. *)
+let packed_value b off width =
+  let nbytes = (width + 7) / 8 in
+  let pad = (nbytes * 8) - width in
+  let byte i = Char.code (Bytes.unsafe_get b (off + i)) in
+  if width <= Value.int_bits then begin
+    let acc = ref 0 in
+    for i = 0 to nbytes - 1 do
+      acc := (!acc lsl 8) lor byte i
+    done;
+    Value.int (!acc lsr pad)
+  end
+  else if width <= 64 then begin
+    let acc = ref 0L in
+    for i = 0 to nbytes - 1 do
+      acc := Int64.logor (Int64.shift_left !acc 8) (Int64.of_int (byte i))
+    done;
+    Value.int64 (Int64.shift_right_logical !acc pad)
+  end
+  else if pad = 0 then Value.bytes (Bytes.sub b off nbytes)
+  else begin
+    let out = Bytes.create nbytes in
+    for i = 0 to nbytes - 1 do
+      let prev = if i = 0 then 0 else byte (i - 1) in
+      Bytes.unsafe_set out i (Char.unsafe_chr ((prev lsl (8 - pad)) lor (byte i lsr pad) land 0xff))
+    done;
+    Value.bytes out
+  end
+
 (** A scalar value change: one of the 9-state characters, or ['?'] (kept as [Other]). *)
 let scalar_of_char = function '?' -> Value.Other "?" | c -> Value.Scalar (Value.char_to_logic_exn c)
 
