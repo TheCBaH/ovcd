@@ -36,3 +36,25 @@ val open_string : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 
 val open_file : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 (** {!parse_file} or {!Vcd.parse_file}, as {!detect_file} decides. *)
+
+val blocks : string -> (Vcd_types.Timestamp.t * Vcd_types.Timestamp.t) array
+(** The start and end times of an FST file's value change blocks, read from their headers alone. Raises as {!parse_file}
+    does, and [Invalid_argument] for a VCD file. *)
+
+val open_at :
+  ?select:(Vcd_types.ID.t -> bool) -> string -> time:Vcd_types.Timestamp.t -> Vcd.Stateful.state * Vcd.parse_result
+(** [open_at path ~time] starts reading an FST file at a block boundary instead of at the beginning. Raises as
+    {!parse_file} does, and [Invalid_argument] for a VCD file.
+
+    The block is the last one that starts at or before [time] (the first if none does), moved back while a timestamp has
+    changes both in it and in the block before. The stream therefore starts at a whole timestep, which is {e not} [time]
+    in general: it is the start of that block's first timestep, and the caller skips forward.
+
+    The state is the value of each selected ID after all changes before the stream, and the simulation continues from
+    there: its events are those of the full stream from that timestep on, except that there is no [$dumpvars] section
+    and no frame, and it starts with a [Timestamp]. Pass the state as [~init] to {!Vcd.Stateful.stream}, which then
+    yields the full stream's events from that timestep on, [changes] alike and [state] but for the extra IDs below.
+
+    With the first block, the state is empty and the result is that of {!parse_file}: the initial values arrive as the
+    stream's [$dumpvars] changes, as usual. The state may otherwise hold IDs that the full stream has not yet assigned,
+    at the value the file's frame gives them. *)

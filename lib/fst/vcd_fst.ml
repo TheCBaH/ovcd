@@ -104,12 +104,16 @@ let definitions t =
       Ok (header, arr !ids, arr !ports)
 
 (* Events in the order, and with the [$dumpvars] and [$dumpon]/[$dumpoff] placement, of fst2vcd's output. *)
-let events ?select t ~error ~ids ~ports =
+let events ?select ?(block = 0) t ~error ~ids ~ports =
+  let resume = block > 0 in
   let q = Queue.create () in
   let push e = Queue.push e q in
   let id h = if h >= 1 && h <= Array.length ids then ids.(h - 1) else Vcd_types.ID.of_string (Fst.Vcd.id h) in
   let port h = h >= 1 && h <= Array.length ports && ports.(h - 1) in
-  let dumpvars = ref 0 in
+  (* A resumed stream has no [$dumpvars]: the frame's values go to [state] instead of the queue. *)
+  let dumpvars = ref (if resume then 2 else 0) in
+  let in_frame = ref false and state = ref Vcd.ID_map.empty and first_time = ref resume in
+  let change h v = if !in_frame then state := Vcd.ID_map.add (id h) v !state else push (Change (id h, v)) in
   let blackouts = Array.of_list (Fst.blackouts t) and cur = ref 0 in
   let new_time time =
     if !dumpvars = 1 then begin
@@ -136,32 +140,41 @@ let events ?select t ~error ~ids ~ports =
     {
       Fst.time =
         (fun time ->
+          in_frame := false;
+          if !first_time then begin
+            first_time := false;
+            while !cur < Array.length blackouts && Int64.compare (fst blackouts.(!cur)) time < 0 do
+              incr cur
+            done
+          end;
           new_time time;
           blackout time);
       frame =
         (fun time ->
-          if not (Int64.equal time 0L) then new_time time;
-          blackout time);
-      bit = (fun h c -> push (Change (id h, scalar_of_char c)));
+          if resume then in_frame := true
+          else begin
+            if not (Int64.equal time 0L) then new_time time;
+            blackout time
+          end);
+      bit = (fun h c -> change h (scalar_of_char c));
       vector =
         (fun h s off len ->
           let v = Bytes.sub_string s off len in
-          push (Change (id h, if port h then Value.Port v else binary_value v)));
-      real = (fun h d -> push (Change (id h, Value.Real d)));
-      varlen = (fun h s off len -> push (Change (id h, Value.String (Fst.Vcd.escape s off len))));
+          change h (if port h then Value.Port v else binary_value v));
+      real = (fun h d -> change h (Value.Real d));
+      varlen = (fun h s off len -> change h (Value.String (Fst.Vcd.escape s off len)));
     }
   in
   let packed h b off width =
-    let v =
-      if port h then
-        Value.Port
-          (String.init width (fun j ->
-               if (Char.code (Bytes.get b (off + (j lsr 3))) lsr (7 - (j land 7))) land 1 = 1 then '1' else '0'))
-      else packed_value b off width
-    in
-    push (Change (id h, v))
+    change h
+      (if port h then
+         Value.Port
+           (String.init width (fun j ->
+                if (Char.code (Bytes.get b (off + (j lsr 3))) lsr (7 - (j land 7))) land 1 = 1 then '1' else '0'))
+       else packed_value b off width)
   in
-  match Fst.reader ?select:(Option.map (fun f h -> f (id h)) select) ~packed t sink with
+  let select = Option.map (fun f h -> f (id h)) select in
+  match if resume then Fst.reader_at ?select ~packed t sink ~block else Fst.reader ?select ~packed t sink with
   | Error e -> raise (error e)
   | Ok r ->
       let rec next () =
@@ -175,7 +188,12 @@ let events ?select t ~error ~ids ~ports =
                 Seq.Nil
             | Error e -> raise (error e))
       in
-      next
+      (* A resumed stream's state is complete once the first block's frame and its first [time] have been
+         delivered, so that step is taken now. *)
+      if resume then begin
+        match Fst.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e)
+      end;
+      (!state, next)
 
 let parse ?select ~name opened =
   let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)) in
@@ -189,7 +207,7 @@ let parse ?select ~name opened =
       in
       match definitions t with
       | Error e -> raise (error e)
-      | Ok (header, ids, ports) -> { Vcd.header; simulation = events ?select t ~error ~ids ~ports })
+      | Ok (header, ids, ports) -> { Vcd.header; simulation = snd (events ?select t ~error ~ids ~ports) })
 
 let parse_string ?select s = parse ?select ~name:"<string>" (Fst.of_string s)
 let parse_file ?select path = parse ?select ~name:path (Fst.open_file path)
@@ -199,3 +217,46 @@ let open_string ?select s =
 
 let open_file ?select path =
   match detect_file path with `Fst -> parse_file ?select path | `Vcd -> Vcd.parse_file ?select path
+
+(* An FST opened for [fn]; raises as [parse] does, and [Invalid_argument] for a VCD. *)
+let with_fst ~fn path f =
+  if detect_file path = `Vcd then invalid_arg (fn ^ ": not an FST file");
+  let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" path (Fst.Error.to_string e)) in
+  match Fst.open_file path with
+  | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
+  | Error e -> raise (error e)
+  | Ok t ->
+      let error e =
+        Fst.close t;
+        error e
+      in
+      f t error
+
+let blocks path =
+  with_fst ~fn:"Vcd_fst.blocks" path (fun t error ->
+      match Fst.blocks t with
+      | Error e -> raise (error e)
+      | Ok bs ->
+          Fst.close t;
+          Array.map
+            (fun (b : Fst.block) ->
+              (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
+            bs)
+
+let open_at ?select path ~time =
+  with_fst ~fn:"Vcd_fst.open_at" path (fun t error ->
+      match definitions t with
+      | Error e -> raise (error e)
+      | Ok (header, ids, ports) ->
+          let time = Vcd_types.Timestamp.to_int64 time in
+          let block =
+            match Fst.blocks t with
+            | Error e -> raise (error e)
+            | Ok [||] -> 0
+            | Ok bs -> (
+                let k = ref 0 in
+                Array.iteri (fun i (b : Fst.block) -> if Int64.compare b.start_time time <= 0 then k := i) bs;
+                match Fst.aligned_block t !k with Ok j -> j | Error e -> raise (error e))
+          in
+          let state, simulation = events ?select ~block t ~error ~ids ~ports in
+          (state, { Vcd.header; simulation }))

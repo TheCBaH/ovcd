@@ -52,3 +52,28 @@ With a selection, FST and VCD keep the same changes, and ask about each ID once:
   $ ./fst_equal data/fst2vcd/repack.fst data/fst2vcd/repack.vcd 1000000
   19 IDs asked once, 0 selected
   407 events
+
+Reading can start at a block boundary: open_at gives the state before it, and
+Stateful.stream ~init on the rest is the full stream from there on (the state
+may also hold IDs the full stream has not assigned yet). Every block of the
+multiblock trace starts in a time step that has changes in the block before,
+so open_at steps back to the first; the clean trace's blocks do not:
+
+  $ ./fst_seek data/verilator/sv_types.fst
+  1 blocks, 5 seeks, 0 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/kitchen.fst
+  2 blocks, 9 seeks, 5 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/kitchen.fst 3
+  2 blocks, 9 seeks, 5 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/repack.fst
+  2 blocks, 9 seeks, 5 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/multiblock.fst
+  21 blocks, 87 seeks, 0 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/multiblock.fst 2
+  21 blocks, 87 seeks, 0 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/clean.fst
+  11 blocks, 47 seeks, 41 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/clean.fst 2
+  11 blocks, 47 seeks, 41 resumed after the first block, 0 differ
+  $ ./fst_seek data/fst2vcd/clean.fst 3
+  11 blocks, 47 seeks, 41 resumed after the first block, 0 differ
