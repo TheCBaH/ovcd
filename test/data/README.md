@@ -23,4 +23,8 @@ is the same reference's `a2_timezero.vcd`, a small trace with `$timezero -42`.
 (`a2_kitchen_z.fst`, `a2_timezero.fst`). `repack.fst` (`a2_repack.fst`) is the
 kitchen trace at 1 ps, gzip-wrapped by libfst's repack-on-close (first byte
 `0xFE`); `repack.vcd` is its `a2_repack.ext.vcd`.
-`test/fst.t` checks that each FST parses to its VCD.
+`multiblock.fst` (`a2_multiblock_z.fst`) has many small blocks, some of which
+start at the time the previous one ended. `clean.fst` (`a2_clean_z.fst`) has
+blocks that each start at a new time, with a string and a real that keep their
+value across several of them. `test/fst.t` checks that each FST
+parses to its VCD, and that reading can resume at a block boundary.

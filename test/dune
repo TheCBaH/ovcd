@@ -24,10 +24,20 @@
  (modules fst_equal)
  (libraries ovcd vcd_fst vcd_types))
 
+(executable
+ (name fst_seek)
+ (modules fst_seek)
+ (libraries ovcd vcd_fst vcd_types))
+
 (rule
  (target fst_equal)
  (action
   (copy %{exe:fst_equal.exe} %{target})))
+
+(rule
+ (target fst_seek)
+ (action
+  (copy %{exe:fst_seek.exe} %{target})))
 
 (rule
  (target vcd_dump)
@@ -53,6 +63,7 @@
  (applies_to fst)
  (deps
   fst_equal
+  fst_seek
   vcd_dump
   vcd_tool
   (glob_files data/fst2vcd/*)
