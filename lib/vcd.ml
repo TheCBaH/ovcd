@@ -113,48 +113,72 @@ module Resolver = struct
     let compare = List.compare String.compare
   end)
 
-  type entry = { id : Vcd_types.ID.t; size : int; references : Ref_set.t }
+  type entry = { id : Vcd_types.ID.t; size : int; refs : Vcd_types.Reference.t list; references : Ref_set.t Lazy.t }
+
+  let entry id size refs = { id; size; refs; references = lazy (Ref_set.of_list refs) }
+
+  (* [Hashtbl.hash] only samples the leaf-most components of a path; [equal] decides, so deep paths merely collide. *)
+  module Ref_tbl = Hashtbl.Make (struct
+    type t = Vcd_types.Reference.t
+
+    let equal = Vcd_types.Reference.equal
+    let hash = Hashtbl.hash
+  end)
+
+  type ordered = {
+    by_ref : Vcd_types.ID.t Ref_map.t;  (** Reversed reference order: leaf first. *)
+    by_ref_fwd : Vcd_types.ID.t Ref_fwd_map.t;  (** Forward reference order: scope first. *)
+  }
 
   type t = {
     by_id : entry ID_map.t;
-    by_ref : Vcd_types.ID.t Ref_map.t;  (** Reversed reference order: leaf first. *)
-    by_ref_fwd : Vcd_types.ID.t Ref_fwd_map.t;  (** Forward reference order: scope first. *)
+    ids_of_ref : Vcd_types.ID.t Ref_tbl.t;
+    ordered : ordered Lazy.t;  (** Built on the first prefix/suffix query. *)
   }
 
   let make header =
     let open Vcd_ast in
     let open Vcd_types.Reference in
-    let rec collect path vars children (by_id, by_ref, by_ref_fwd) =
-      let by_id, by_ref, by_ref_fwd =
+    (* Sized to the header: growing the table was most of the cost of [make]. *)
+    let rec count (s : scope_node) = List.fold_left (fun n c -> n + count c) (List.length s.vars) s.children in
+    let ids_of_ref = Ref_tbl.create (List.fold_left (fun n s -> n + count s) 16 header.scopes) in
+    let rec collect path vars children by_id =
+      let by_id =
         List.fold_left
-          (fun (by_id, by_ref, by_ref_fwd) var ->
+          (fun by_id var ->
             let r = push var.ref path in
-            let entry =
-              match ID_map.find_opt var.id by_id with
-              | None -> { id = var.id; size = var.size; references = Ref_set.singleton r }
-              | Some e -> { e with references = Ref_set.add r e.references }
-            in
-            (ID_map.add var.id entry by_id, Ref_map.add r var.id by_ref, Ref_fwd_map.add (to_list r) var.id by_ref_fwd))
-          (by_id, by_ref, by_ref_fwd) vars
+            Ref_tbl.replace ids_of_ref r var.id;
+            ID_map.update var.id
+              (function None -> Some (entry var.id var.size [ r ]) | Some e -> Some (entry e.id e.size (r :: e.refs)))
+              by_id)
+          by_id vars
       in
-      List.fold_left
-        (fun acc child -> collect (push child.s_name path) child.vars child.children acc)
-        (by_id, by_ref, by_ref_fwd) children
+      List.fold_left (fun acc child -> collect (push child.s_name path) child.vars child.children acc) by_id children
     in
-    let by_id, by_ref, by_ref_fwd =
+    let by_id =
       List.fold_left
         (fun acc scope -> collect (push scope.s_name empty) scope.vars scope.children acc)
-        (ID_map.empty, Ref_map.empty, Ref_fwd_map.empty)
-        header.scopes
+        ID_map.empty header.scopes
     in
-    { by_id; by_ref; by_ref_fwd }
+    let ordered =
+      lazy
+        (Ref_tbl.fold
+           (fun r id { by_ref; by_ref_fwd } ->
+             { by_ref = Ref_map.add r id by_ref; by_ref_fwd = Ref_fwd_map.add (to_list r) id by_ref_fwd })
+           ids_of_ref
+           { by_ref = Ref_map.empty; by_ref_fwd = Ref_fwd_map.empty })
+    in
+    { by_id; ids_of_ref; ordered }
 
   let entry_id e = e.id
   let entry_size e = e.size
-  let entry_references e = e.references
+  let entry_references e = Lazy.force e.references
   let find t id = ID_map.find_opt id t.by_id
-  let references t id = match ID_map.find_opt id t.by_id with None -> Ref_set.empty | Some e -> e.references
-  let find_id t ref = Ref_map.find_opt ref t.by_ref
+
+  let references t id =
+    match ID_map.find_opt id t.by_id with None -> Ref_set.empty | Some e -> Lazy.force e.references
+
+  let find_id t ref = Ref_tbl.find_opt t.ids_of_ref ref
   let fold f t acc = ID_map.fold (fun _ e a -> f e a) t.by_id acc
 
   let list_starts_with prefix lst =
@@ -180,7 +204,7 @@ module Resolver = struct
       | Seq.Nil -> acc
       | Seq.Cons ((k, id), rest) -> if Vcd_types.Reference.compare k ub < 0 then go (ID_set.add id acc) rest else acc
     in
-    go ID_set.empty (Ref_map.to_seq_from lb t.by_ref)
+    go ID_set.empty (Ref_map.to_seq_from lb (Lazy.force t.ordered).by_ref)
 
   (* Range-query [by_ref_fwd] for references starting with [prefix_fwd].
      Keys are [string list] in forward order, so [prefix_fwd] is used directly
@@ -192,13 +216,14 @@ module Resolver = struct
       | Seq.Nil -> acc
       | Seq.Cons ((k, id), rest) -> if list_starts_with prefix_fwd k then go (ID_set.add id acc) rest else acc
     in
-    go ID_set.empty (Ref_fwd_map.to_seq_from prefix_fwd t.by_ref_fwd)
+    go ID_set.empty (Ref_fwd_map.to_seq_from prefix_fwd (Lazy.force t.ordered).by_ref_fwd)
 
   let find_all pat t =
     let head, tail = Filter_matcher.anchors pat in
     let add_if_match e acc =
-      let refs = Ref_set.filter (Filter_matcher.matches pat) e.references in
-      if Ref_set.is_empty refs then acc else { e with references = refs } :: acc
+      let refs = Ref_set.filter (Filter_matcher.matches pat) (Lazy.force e.references) in
+      if Ref_set.is_empty refs then acc
+      else { e with refs = Ref_set.elements refs; references = Lazy.from_val refs } :: acc
     in
     match (head, tail) with
     | [], [] -> ID_map.fold (fun _ e acc -> add_if_match e acc) t.by_id []
