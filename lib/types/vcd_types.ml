@@ -267,6 +267,73 @@ module Value = struct
   [@@ai_disclosure "ai-generated"]
 end
 
+module Packed = struct
+  type t = { bits : bytes; unknown : bytes }
+  type error = Not_a_vector of Value.t | Too_wide of { width : int; bytes : int }
+
+  let nbytes width = (width + 7) / 8
+
+  (* Clears the bits at or above [width] in the last byte. *)
+  let trim width b =
+    let r = width land 7 in
+    if r <> 0 then begin
+      let i = Bytes.length b - 1 in
+      Bytes.set_uint8 b i (Bytes.get_uint8 b i land ((1 lsl r) - 1))
+    end;
+    b
+
+  let known bits = Ok { bits; unknown = Bytes.make (Bytes.length bits) '\000' }
+
+  let of_int64 ~width n =
+    let b = Bytes.make (nbytes width) '\000' in
+    for i = 0 to min (Bytes.length b) 8 - 1 do
+      Bytes.set_uint8 b i (Int64.to_int (Int64.shift_right_logical n (8 * i)) land 255)
+    done;
+    known (trim width b)
+
+  let of_bytes_be ~width src =
+    let n = Bytes.length src and nb = nbytes width in
+    let b = Bytes.make nb '\000' in
+    let fits = ref true in
+    for j = 0 to n - 1 do
+      let byte = Bytes.get_uint8 src (n - 1 - j) in
+      if j < nb then Bytes.set_uint8 b j byte else if byte <> 0 then fits := false
+    done;
+    let r = width land 7 in
+    if r <> 0 && nb > 0 && Bytes.get_uint8 b (nb - 1) lsr r <> 0 then fits := false;
+    if !fits then known b else Error (Too_wide { width; bytes = n })
+
+  let of_logics ~width ls =
+    let a = Array.of_list ls in
+    let n = Array.length a in
+    let ext = if n > 0 then match a.(0) with (Value.X | Value.Z) as l -> l | _ -> Value.B0 else Value.B0 in
+    let nb = nbytes width in
+    let bits = Bytes.make nb '\000' and unknown = Bytes.make nb '\000' in
+    let set b k =
+      let i = k lsr 3 in
+      Bytes.set_uint8 b i (Bytes.get_uint8 b i lor (1 lsl (k land 7)))
+    in
+    for k = 0 to width - 1 do
+      match if k < n then a.(n - 1 - k) else ext with
+      | Value.B0 -> ()
+      | B1 -> set bits k
+      | H ->
+          set bits k;
+          set unknown k
+      | X | Z | U | W | L | Dont_care -> set unknown k
+    done;
+    Ok { bits; unknown }
+
+  let of_value ~width (v : Value.t) =
+    match v with
+    | Int n -> of_int64 ~width (Int64.of_int n)
+    | Int64 n -> of_int64 ~width n
+    | Bytes b -> of_bytes_be ~width b
+    | Scalar l -> of_logics ~width [ l ]
+    | Scalars ls -> of_logics ~width ls
+    | Real _ | Other _ | Port _ | String _ -> Error (Not_a_vector v)
+end
+
 [@@@ai_disclosure "ai-assisted"]
 [@@@ai_model "claude-sonnet-4-6"]
 [@@@ai_provider "Anthropic"]
