@@ -51,7 +51,9 @@ module Resolver : sig
   (** Opaque per-signal record. One entry per unique ID; may carry multiple [Reference.t] aliases. *)
 
   val entry_id : entry -> Vcd_types.ID.t
+
   val entry_size : entry -> int
+  (** The width of the ID's first declaration; aliases declared later do not change it. *)
 
   val entry_references : entry -> Ref_set.t
   (** All hierarchical names that map to this ID (at least one; more when the signal is aliased). *)
@@ -71,7 +73,7 @@ module Resolver : sig
   (** Reverse lookup: find the [ID.t] for a given [Reference.t]. *)
 
   val fold : (entry -> 'a -> 'a) -> t -> 'a -> 'a
-  (** Fold over all entries in declaration order. *)
+  (** Fold over all entries in ID order ([ID.compare]), once per distinct ID. *)
 
   val find_all : Filter_ast.pattern -> t -> entry list
   (** [find_all pat t] returns all entries that have at least one reference matched by [pat]. Order is unspecified. *)
