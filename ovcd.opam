@@ -81,9 +81,10 @@ build: [
   ]
 ]
 dev-repo: "git+https://github.com/TheCBaH/ovcd.git"
-# fst and its unlz4 dependency are not in opam-repository yet; pin-depends is
-# not transitive, so both are pinned here.
+# fst, its unlz4 dependency and zipc (with the unreleased zlib_decompress ~start fix) are
+# not in opam-repository yet; pin-depends is not transitive, so all three are pinned here.
 pin-depends: [
-  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#c078a3eaec7381ea41a6b62d4fa86c04f27c5a1e"]
+  ["zipc.dev" "git+https://github.com/dbuenzli/zipc.git#076e6168a222dfe46b7ba598dc87a9a2e58b2569"]
+  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#b6fe24f90098d3f0d2f7fecbcd1fb7b42f4f3b6f"]
   ["unlz4.dev" "git+https://github.com/TheCBaH/ocaml-unlz4.git#f5446abf9a4ce4beb92b02ee958f345a6c8171bd"]
 ]
