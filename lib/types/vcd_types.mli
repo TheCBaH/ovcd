@@ -137,6 +137,27 @@ module Value : sig
       {!get_bits64_exn} would raise. *)
 end
 
+module Packed : sig
+  (** A vector {!Value.t} as two little-endian bit masks. This is a lossy view: X, Z, U, W, L and [Dont_care] all become
+      the same unknown bit, so keep the {!Value.t} when the distinction matters. *)
+
+  type t = {
+    bits : bytes;  (** Bit [k] is bit [k land 7] of byte [k lsr 3]; [(width + 7) / 8] bytes. *)
+    unknown : bytes;
+        (** Same layout. A bit is set where the digit is not [B0] or [B1]; [bits] then holds its weak value: set for
+            [H], clear for the others. *)
+  }
+
+  type error =
+    | Not_a_vector of Value.t  (** [Real], [Other], [Port] or [String]. *)
+    | Too_wide of { width : int; bytes : int }  (** A [Bytes] value with a bit set at or above [width]. *)
+
+  val of_value : width:int -> Value.t -> (t, error) result
+  (** The value as a [width]-bit vector, following VCD's extension rules: a shorter vector is extended with [B0], or
+      with [X] or [Z] when its leftmost digit is [X] or [Z]; a longer [Scalars] vector is cut to [width]. [Int] and
+      [Int64] are taken modulo [2^width], as a 64-bit pattern. *)
+end
+
 [@@@ai_disclosure "ai-assisted"]
 [@@@ai_model "claude-sonnet-4-6"]
 [@@@ai_provider "Anthropic"]
