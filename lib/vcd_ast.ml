@@ -94,14 +94,15 @@ let scope_type_of_keyword = function
     [len mod 8 <> 0] the first byte is left-padded with zeros, so the bytes are the value as a big-endian number. *)
 let pack_bits s len =
   let nbytes = (len + 7) / 8 in
-  let pad = (nbytes * 8) - len in
-  let buf = Bytes.make nbytes '\x00' in
-  for i = 0 to len - 1 do
-    if s.[i] = '1' then begin
-      let byte_idx = (i + pad) / 8 in
-      let bit_pos = 7 - ((i + pad) mod 8) in
-      Bytes.set buf byte_idx (Char.chr (Char.code (Bytes.get buf byte_idx) lor (1 lsl bit_pos)))
-    end
+  let buf = Bytes.create nbytes in
+  let pos = ref 0 in
+  for b = 0 to nbytes - 1 do
+    let v = ref 0 in
+    for _ = 1 to if b = 0 then len - ((nbytes - 1) * 8) else 8 do
+      v := (!v lsl 1) lor if s.[!pos] = '1' then 1 else 0;
+      incr pos
+    done;
+    Bytes.unsafe_set buf b (Char.unsafe_chr !v)
   done;
   buf
 
@@ -128,18 +129,42 @@ let parse_vector s =
     else Bytes (pack_bits s len)
   else try Scalars (List.init len (fun i -> char_to_logic_exn s.[i])) with InvalidLogicChar _ -> Other s
 
+exception Not_binary
+
+(* The digit at [i] as 0 or 1; raises [Not_binary] for any other character. *)
+let bit s i =
+  let d = Char.code s.[i] - 48 in
+  if d lor 1 <> 1 then raise_notrace Not_binary else d
+
+(* The digits [i, j) as a native int; [j - i] must not exceed 62. *)
+let bits_int s i j =
+  let acc = ref 0 in
+  for k = i to j - 1 do
+    acc := (!acc lsl 1) lor bit s k
+  done;
+  !acc
+
 (** The digits of a [b] record as the lexer decodes them: all-0/1 digits are an [Int] up to [int_bits], an [Int64] up to
     64 bits (both through the {!Value.int} and {!Value.int64} constructors), [Bytes] beyond; anything else goes through
     {!parse_vector}. *)
 let binary_value s =
   let n = String.length s in
-  if n > 0 && String.for_all (fun c -> c = '0' || c = '1') s then
-    if n <= Value.int_bits then Value.int (String.fold_left (fun acc c -> (acc lsl 1) lor (Char.code c - 48)) 0 s)
-    else if n <= 64 then
-      Value.int64
-        (String.fold_left (fun acc c -> Int64.logor (Int64.shift_left acc 1) (Int64.of_int (Char.code c land 1))) 0L s)
-    else Value.bytes (pack_bits s n)
-  else parse_vector s
+  if n = 0 then parse_vector s
+  else
+    try
+      if n <= Value.int_bits then Value.int (bits_int s 0 n)
+      else if n <= 64 then begin
+        let split = max 0 (n - 32) in
+        let hi = bits_int s 0 split and lo = bits_int s split n in
+        Value.int64 (Int64.logor (Int64.shift_left (Int64.of_int hi) 32) (Int64.of_int lo))
+      end
+      else begin
+        for i = 0 to n - 1 do
+          ignore (bit s i)
+        done;
+        Value.bytes (pack_bits s n)
+      end
+    with Not_binary -> parse_vector s
 
 (** A scalar value change: one of the 9-state characters, or ['?'] (kept as [Other]). *)
 let scalar_of_char = function '?' -> Value.Other "?" | c -> Value.Scalar (Value.char_to_logic_exn c)

@@ -2,6 +2,7 @@
  (name vcd_tests)
  (wrapped false)
  (modules
+  test_binary_value
   test_filter_match
   test_filter_parse
   test_header_parser
