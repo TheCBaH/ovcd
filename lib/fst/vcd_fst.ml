@@ -190,9 +190,9 @@ let events ?select ?(block = 0) t ~error ~ids ~ports =
       in
       (* A resumed stream's state is complete once the first block's frame and its first [time] have been
          delivered, so that step is taken now. *)
-      if resume then begin
-        match Fst.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e)
-      end;
+      if resume then
+        begin match Fst.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e)
+        end;
       (!state, next)
 
 let parse ?select ~name opened =
