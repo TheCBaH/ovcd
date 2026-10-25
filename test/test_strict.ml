@@ -65,7 +65,8 @@ let%expect_test "channel input" =
   through_channel (header ^ "#0\n$dumpvars\n0!\n");
   through_channel (header ^ "#0\n1!");
   through_channel "";
-  [%expect {|
+  [%expect
+    {|
     ok, 6 events
     Parse_error: missing $enddefinitions
     Parse_error: unterminated dump block at end of input

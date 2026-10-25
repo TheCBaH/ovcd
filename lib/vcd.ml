@@ -89,10 +89,7 @@ let events_seq ?select ?last_byte header lexbuf =
     in
     match Vcd_lexer.next_selected keep lexbuf with
     | Some ev ->
-        (match ev with
-        | Vcd_ast.DumpStart _ -> in_dump := true
-        | Vcd_ast.DumpEnd -> in_dump := false
-        | _ -> ());
+        (match ev with Vcd_ast.DumpStart _ -> in_dump := true | Vcd_ast.DumpEnd -> in_dump := false | _ -> ());
         Seq.Cons (ev, next)
     | None -> (
         match last_byte with
