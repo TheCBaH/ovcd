@@ -12,6 +12,7 @@
   test_resolver
   test_select
   test_stateful
+  test_strict
   test_value
   test_vcd)
  (libraries ovcd vcd_util vcd_filter)

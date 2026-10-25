@@ -29,8 +29,8 @@ let make_lexbuf_from_file path =
   lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = path };
   (lexbuf, ic)
 
-let parse_header_exn lexbuf =
-  try Vcd_parser.parse_header Vcd_lexer.token lexbuf with
+let parse_header_exn ?(token = Vcd_lexer.token) lexbuf =
+  try Vcd_parser.parse_header token lexbuf with
   | Vcd_parser.Error ->
       let pos = lexbuf.Lexing.lex_curr_p in
       raise
@@ -38,6 +38,24 @@ let parse_header_exn lexbuf =
            (Printf.sprintf "syntax error at %s line %d col %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
               (pos.Lexing.pos_cnum - pos.Lexing.pos_bol)))
   | Failure msg -> raise (Parse_error msg)
+
+let strict_error lexbuf msg =
+  let pos = lexbuf.Lexing.lex_curr_p in
+  Parse_error
+    (Printf.sprintf "%s at %s line %d col %d" msg pos.Lexing.pos_fname pos.Lexing.pos_lnum
+       (pos.Lexing.pos_cnum - pos.Lexing.pos_bol))
+
+(* $enddefinitions is what ends the header; the grammar also accepts EOF there, which strict parsing rejects. *)
+let parse_header_strict lexbuf =
+  let ended = ref false in
+  let token lexbuf =
+    let t = Vcd_lexer.token lexbuf in
+    if t = Vcd_parser.KW_ENDDEFS then ended := true;
+    t
+  in
+  let header = parse_header_exn ~token lexbuf in
+  if not !ended then raise (strict_error lexbuf "missing $enddefinitions");
+  header
 
 (* The selected IDs among those the header declares, each asked once, on the first pull. *)
 let selection header select =
@@ -56,8 +74,9 @@ let selection header select =
   List.iter walk header.Vcd_ast.scopes;
   Hashtbl.mem kept
 
-let events_seq ?select header lexbuf =
-  let chosen = ref None in
+(* [last_byte] is the last byte read from the source; given, parsing is strict. *)
+let events_seq ?select ?last_byte header lexbuf =
+  let chosen = ref None and in_dump = ref false in
   let rec next () =
     let keep =
       match (!chosen, select) with
@@ -69,22 +88,45 @@ let events_seq ?select header lexbuf =
           k
     in
     match Vcd_lexer.next_selected keep lexbuf with
-    | Some ev -> Seq.Cons (ev, next)
-    | None -> Seq.Nil
+    | Some ev ->
+        (match ev with Vcd_ast.DumpStart _ -> in_dump := true | Vcd_ast.DumpEnd -> in_dump := false | _ -> ());
+        Seq.Cons (ev, next)
+    | None -> (
+        match last_byte with
+        | None -> Seq.Nil
+        | Some last ->
+            if last () <> Some '\n' then raise (strict_error lexbuf "input does not end with a newline");
+            if !in_dump then raise (strict_error lexbuf "unterminated dump block at end of input");
+            Seq.Nil)
     | exception Failure msg -> raise (Parse_error msg)
   in
   next
 
-let parse_lexbuf ?select lexbuf =
-  let header = parse_header_exn lexbuf in
-  { header; simulation = events_seq ?select header lexbuf }
+let parse_lexbuf ?select ?last_byte lexbuf =
+  let header = if last_byte = None then parse_header_exn lexbuf else parse_header_strict lexbuf in
+  { header; simulation = events_seq ?select ?last_byte header lexbuf }
 
 (* ------------------------------------------------------------------ *)
 (*  Public API                                                         *)
 (* ------------------------------------------------------------------ *)
 
-let parse_string ?select s = parse_lexbuf ?select (make_lexbuf_from_string s)
-let parse_channel ?select ic = parse_lexbuf ?select (make_lexbuf_from_channel ic)
+let parse_string ?select ?(strict = false) s =
+  let last_byte = if strict then Some (fun () -> if s = "" then None else Some s.[String.length s - 1]) else None in
+  parse_lexbuf ?select ?last_byte (make_lexbuf_from_string s)
+
+let parse_channel ?select ?(strict = false) ic =
+  if not strict then parse_lexbuf ?select (make_lexbuf_from_channel ic)
+  else begin
+    let last = ref None in
+    let refill buf n =
+      let r = input ic buf 0 n in
+      if r > 0 then last := Some (Bytes.get buf (r - 1));
+      r
+    in
+    let lexbuf = Lexing.from_function refill in
+    lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = "<channel>" };
+    parse_lexbuf ?select ~last_byte:(fun () -> !last) lexbuf
+  end
 
 let parse_file ?select path =
   let lexbuf, _ic = make_lexbuf_from_file path in
