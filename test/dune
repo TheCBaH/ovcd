@@ -11,11 +11,12 @@
   test_range
   test_resolver
   test_select
+  test_signals
   test_stateful
   test_strict
   test_value
   test_vcd)
- (libraries ovcd vcd_util vcd_filter)
+ (libraries ovcd vcd_filter vcd_signals vcd_util)
  (inline_tests)
  (preprocess
   (pps ppx_expect ppx_inline_test)))

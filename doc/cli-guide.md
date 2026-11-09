@@ -103,6 +103,21 @@ counter_tb.top.out	%	2
 Aliased signals (the same name reachable by multiple paths) are listed once per
 path. Pipe into `cut -f2` to get just the ID codes.
 
+`--format jsonl` prints one JSON object per line instead, in declaration order
+(the variables of a scope before its child scopes), with the var type and the
+kind of each enclosing scope:
+
+```
+$ vcd_dump --list-signals '**.out' --format jsonl counter_tb.vcd | jq -r .path
+```
+
+The fields are `path`, `parts` (the name by component), `scope_types`, `id`,
+`width`, `var_type` and, when written, `index`. OCaml code can read the lines
+with the `ovcd.signals` library: `Vcd_signals.read` decodes a channel,
+`Vcd_signals.of_line` one line, and `Vcd_signals.of_header` lists the same
+records straight from `(Vcd_fst.open_file path).header` with no process in
+between, which is the way to look for signals in a toplevel.
+
 ### `--resolve` and `--signal` — name-resolved value stream
 
 `--resolve` prints the raw change stream with IDs resolved to hierarchical

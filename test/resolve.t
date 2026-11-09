@@ -655,3 +655,9 @@ sorted by path — **.out matches both the outer and inner aliases:
   $ ./vcd_dump --list-signals '**.nonexistent' ../test-data/vcdvcd/counter_tb.vcd 2>&1
   warning: --list-signals "**.nonexistent" matched no signals
 
+
+List signals as JSON Lines:
+
+  $ ./vcd_dump --list-signals '**.out' --format jsonl ../test-data/vcdvcd/counter_tb.vcd
+  {"path":"counter_tb.out","parts":["counter_tb","out"],"scope_types":["module"],"id":"!","width":2,"var_type":"wire","index":"[1:0]"}
+  {"path":"counter_tb.top.out","parts":["counter_tb","top","out"],"scope_types":["module","module"],"id":"%","width":2,"var_type":"reg","index":"[1:0]"}

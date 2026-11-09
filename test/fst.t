@@ -77,3 +77,10 @@ so open_at steps back to the first; the clean trace's blocks do not:
   11 blocks, 47 seeks, 41 resumed after the first block, 0 differ
   $ ./fst_seek data/fst2vcd/clean.fst 3
   11 blocks, 47 seeks, 41 resumed after the first block, 0 differ
+
+JSON Lines signal listing is the same for an FST and its fst2vcd VCD:
+
+  $ ./vcd_dump --list-signals '**' --format jsonl data/verilator/sv_types.fst > list.fst.jsonl
+  $ ./vcd_dump --list-signals '**' --format jsonl data/verilator/sv_types.fst2vcd.vcd > list.vcd.jsonl
+  $ diff list.fst.jsonl list.vcd.jsonl
+  $ test -s list.fst.jsonl

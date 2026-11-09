@@ -22,7 +22,9 @@
   "A library and tools for parsing Value Change Dump (VCD) waveform files. Provides a streaming parser, a resolver for hierarchical signal names, and the vcd_dump and vcd_tool command-line utilities.")
  (depends
   (ocaml (>= 4.14))
+  bytesrw
   fst
+  jsont
   (menhir (>= 20211230))
   (menhirLib (>= 20211230))
   re

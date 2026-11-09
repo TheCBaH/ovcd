@@ -13,7 +13,9 @@ bug-reports: "https://github.com/TheCBaH/ovcd/issues"
 depends: [
   "dune" {>= "3.0"}
   "ocaml" {>= "4.14"}
+  "bytesrw"
   "fst"
+  "jsont"
   "menhir" {>= "20211230"}
   "menhirLib" {>= "20211230"}
   "re"

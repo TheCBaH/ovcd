@@ -34,6 +34,7 @@ let main () =
   let patterns = ref [] in
   let regexes = ref [] in
   let list_signals = ref [] in
+  let format = ref "tsv" in
   let files = ref [] in
   let spec =
     [
@@ -74,11 +75,14 @@ let main () =
       ( "--list-signals",
         Arg.String (parse_pattern_or_exit list_signals),
         "PATTERN  List matching signals as 'path<TAB>id<TAB>width' and exit (may be repeated)" );
+      ( "--format",
+        Arg.Symbol ([ "tsv"; "jsonl" ], fun f -> format := f),
+        " Output of --list-signals: tsv (default), or jsonl in declaration order with var type and scope kinds" );
     ]
   in
   let usage =
     "usage: vcd_dump [--summary] [--bench N] [--resolve] [--strip] [--range SPEC]... [--signal PATTERN]... \
-     [--signal-re REGEX]... [--list-signals PATTERN]... <file.vcd|file.fst>"
+     [--signal-re REGEX]... [--list-signals PATTERN]... [--format tsv|jsonl] <file.vcd|file.fst>"
   in
   Arg.parse spec (fun f -> files := f :: !files) usage;
   let files = List.rev !files in
@@ -128,7 +132,16 @@ let main () =
                 acc)
             resolver []
         in
-        List.iter (fun (path, id, size) -> Printf.printf "%s\t%s\t%d\n" path id size) (List.sort_uniq compare rows)
+        if !format = "jsonl" then begin
+          let wanted (s : Vcd_signals.t) =
+            let r = Vcd_types.Reference.of_list s.parts in
+            match Vcd.Resolver.find_id resolver r with
+            | None -> false
+            | Some id -> Vcd.Ref_set.mem r (Vcd_util.selected_refs resolver filter id)
+          in
+          Vcd_signals.write stdout (Seq.filter wanted (Vcd_signals.of_header h))
+        end
+        else List.iter (fun (path, id, size) -> Printf.printf "%s\t%s\t%d\n" path id size) (List.sort_uniq compare rows)
       end
       else if !bench_runs > 0 then begin
         for _ = 1 to !bench_runs do

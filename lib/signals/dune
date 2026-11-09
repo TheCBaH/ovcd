@@ -1,0 +1,6 @@
+(library
+ (name vcd_signals)
+ (public_name ovcd.signals)
+ (wrapped false)
+ (modules vcd_signals)
+ (libraries bytesrw jsont jsont.bytesrw ovcd))
