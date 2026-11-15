@@ -49,9 +49,9 @@ extra-source "test-data-pyDigitalWaveTools.tar.gz" {
 }
 extra-source "test-data-go-vcd-parser.tar.gz" {
   src:
-    "https://github.com/filmil/go-vcd-parser/archive/41e5baeadf3b2ef69311789ae19e2956eac9486c.tar.gz"
+    "https://github.com/filmil/go-vcd-parser/archive/22b3d57623813f58f0ab18dde6530487bcd72eb6.tar.gz"
   checksum: [
-    "sha256=b9de70f1a0b7824b0020f3cddfea6168a46c5d0b8cf8d67691a88cfd214e8776"
+    "sha256=422ab50de5af4ff7c34615349b212108478d8a1b79041f44496cdf668c0390a0"
   ]
 }
 build: [
