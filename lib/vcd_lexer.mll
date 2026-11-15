@@ -7,41 +7,7 @@
     "$scope",            KW_SCOPE;
     "$upscope",          KW_UPSCOPE;
     "$var",              KW_VAR;
-    "$timescale",        KW_TIMESCALE;
     "$timezero",         KW_TIMEZERO;
-    "$date",             KW_DATE;
-    "$version",          KW_VERSION;
-    "$comment",          KW_COMMENT;
-    "$dumpvars",         KW_DUMPVARS;
-    "$dumpall",          KW_DUMPALL;
-    "$dumpon",           KW_DUMPON;
-    "$dumpoff",          KW_DUMPOFF;
-    "$dumpports",        KW_DUMPPORTS;
-    "module",    SCP_MODULE;
-    "task",      SCP_TASK;
-    "function",  SCP_FUNCTION;
-    "begin",     SCP_BEGIN;
-    "fork",      SCP_FORK;
-    "event",     VT_EVENT;
-    "integer",   VT_INTEGER;
-    "parameter", VT_PARAMETER;
-    "real",      VT_REAL;
-    "realtime",  VT_REALTIME;
-    "reg",       VT_REG;
-    "supply0",   VT_SUPPLY0;
-    "supply1",   VT_SUPPLY1;
-    "time",      VT_TIME;
-    "tri",       VT_TRI;
-    "triand",    VT_TRIAND;
-    "trior",     VT_TRIOR;
-    "trireg",    VT_TRIREG;
-    "tri0",      VT_TRI0;
-    "tri1",      VT_TRI1;
-    "wand",      VT_WAND;
-    "wire",      VT_WIRE;
-    "wor",       VT_WOR;
-    "logic",     VT_LOGIC;    (* SystemVerilog / VHDL *)
-    "string",    VT_STRING;   (* SystemVerilog / VHDL *)
   ]
 
   let keyword_tbl =
@@ -99,6 +65,10 @@ let word    = idchar+
 rule token = parse
   | '\n'    { Lexing.new_line lexbuf; token lexbuf }
   | blank+  { token lexbuf }
+  | "$timescale" { TIMESCALE (collect_text (Buffer.create 16) lexbuf) }
+  | "$date"      { DATE (collect_text (Buffer.create 16) lexbuf) }
+  | "$version"   { VERSION (collect_text (Buffer.create 16) lexbuf) }
+  | "$comment"   { COMMENT (collect_text (Buffer.create 16) lexbuf) }
   | word    { lookup_or_id (Lexing.lexeme lexbuf) }
   | eof     { Vcd_parser.EOF }
   | _       { token lexbuf }

@@ -117,3 +117,9 @@ module File : sig
   val header_builds : t -> int
   (** How many times the header was built from the hierarchy: 1 once {!header} or {!stream} has been called. *)
 end
+
+(**/**)
+
+(* Internal, for the tests: the header builder, fed one definition at a time. *)
+
+val collector : unit -> (Fst.Vcd.definition -> unit) * (unit -> Vcd_ast.header)

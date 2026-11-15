@@ -22,25 +22,11 @@ let show_header_tokens s =
         | Vcd_parser.KW_SCOPE -> "$scope"
         | Vcd_parser.KW_UPSCOPE -> "$upscope"
         | Vcd_parser.KW_VAR -> "$var"
-        | Vcd_parser.KW_DATE -> "$date"
-        | Vcd_parser.KW_VERSION -> "$version"
-        | Vcd_parser.KW_TIMESCALE -> "$timescale"
         | Vcd_parser.KW_TIMEZERO -> "$timezero"
-        | Vcd_parser.KW_COMMENT -> "$comment"
-        | Vcd_parser.SCP_MODULE -> "module"
-        | Vcd_parser.SCP_TASK -> "task"
-        | Vcd_parser.SCP_FUNCTION -> "function"
-        | Vcd_parser.SCP_BEGIN -> "begin"
-        | Vcd_parser.SCP_FORK -> "fork"
-        | Vcd_parser.VT_WIRE -> "wire"
-        | Vcd_parser.VT_REG -> "reg"
-        | Vcd_parser.VT_INTEGER -> "integer"
-        | Vcd_parser.VT_REAL -> "real"
-        | Vcd_parser.VT_REALTIME -> "realtime"
-        | Vcd_parser.VT_PARAMETER -> "parameter"
-        | Vcd_parser.VT_EVENT -> "event"
-        | Vcd_parser.VT_TIME -> "time"
-        | Vcd_parser.VT_TRI -> "tri"
+        | Vcd_parser.DATE t -> Printf.sprintf "DATE(%s)" t
+        | Vcd_parser.VERSION t -> Printf.sprintf "VERSION(%s)" t
+        | Vcd_parser.TIMESCALE t -> Printf.sprintf "TIMESCALE(%s)" t
+        | Vcd_parser.COMMENT t -> Printf.sprintf "COMMENT(%s)" t
         | Vcd_parser.ID s -> Printf.sprintf "ID(%s)" s
         | _ -> "?"
       in
@@ -79,19 +65,19 @@ let show_events ?(n = 20) s =
 
 let%expect_test "keywords are recognised" =
   print_string (show_header_tokens "$scope module top $end $upscope $end $var wire 8 ! bus $end $enddefinitions");
-  [%expect {| $scope module ID(top) $end $upscope $end $var wire ID(8) ID(!) ID(bus) $end |}]
+  [%expect {| $scope ID(module) ID(top) $end $upscope $end $var ID(wire) ID(8) ID(!) ID(bus) $end |}]
 
 let%expect_test "timescale tokens" =
   print_string (show_header_tokens "$timescale 1 ns $end $enddefinitions");
-  [%expect {| $timescale ID(1) ID(ns) $end |}]
+  [%expect {| TIMESCALE(1 ns) |}]
 
-let%expect_test "comment keyword passes through as ID in text block" =
+let%expect_test "a comment is one text token" =
   print_string (show_header_tokens "$comment wire reg $end $enddefinitions");
-  [%expect {| $comment wire reg $end |}]
+  [%expect {| COMMENT(wire reg) |}]
 
-let%expect_test "unknown words become ID" =
+let%expect_test "a date is one text token" =
   print_string (show_header_tokens "$date Sat Apr 29 09:34:13 2017 $end $enddefinitions");
-  [%expect {| $date ID(Sat) ID(Apr) ID(29) ID(09:34:13) ID(2017) $end |}]
+  [%expect {| DATE(Sat Apr 29 09:34:13 2017) |}]
 
 (* ------------------------------------------------------------------ *)
 (*  Simulation event stream                                             *)
@@ -189,3 +175,7 @@ let%expect_test "unexpected character reports its line" =
 let%expect_test "timezero tokens" =
   print_string (show_header_tokens "$timezero\n\t-42\n$end $enddefinitions");
   [%expect {| $timezero ID(-42) $end |}]
+
+let%expect_test "text tokens keep keywords and collapse whitespace" =
+  print_string (show_header_tokens "$comment  a $var\n b $end $version $end $enddefinitions");
+  [%expect {| COMMENT(a $var b) VERSION() |}]

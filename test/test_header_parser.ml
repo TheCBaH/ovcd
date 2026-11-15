@@ -357,3 +357,72 @@ let%expect_test "var_type_of_keyword and scope_type_of_keyword agree with the pa
       | _ -> Printf.printf "scope type %s differs\n" kw)
     scope_types;
   [%expect {| |}]
+
+(* ------------------------------------------------------------------ *)
+(*  Free-text blocks and multi-word references (D4)                     *)
+(* ------------------------------------------------------------------ *)
+
+let show_parse s =
+  match parse_header s with
+  | h -> pp_header h
+  | exception Vcd_parser.Error -> print_endline "syntax error"
+  | exception Vcd_error.Located (_, m) -> print_endline m
+
+let%expect_test "empty date, version, timescale and comment blocks" =
+  show_parse "$date $end $version $end $timescale $end $comment $end $enddefinitions $end";
+  [%expect {|
+    date:      
+    version:   
+    timescale: 
+    comment:   |}]
+
+let%expect_test "keywords inside text blocks" =
+  show_parse
+    "$comment a $var b $scope c $upscope d $enddefinitions e $timezero f $date g $end $version $scope x $end \
+     $enddefinitions $end";
+  [%expect
+    {|
+    date:      (none)
+    version:   $scope x
+    timescale: (none)
+    comment:   a $var b $scope c $upscope d $enddefinitions e $timezero f $date g |}]
+
+let%expect_test "dump keywords keep their dollar sign in text" =
+  show_parse "$comment $dumpvars $dumpall $dumpon $dumpoff $dumpports $end $enddefinitions $end";
+  [%expect
+    {|
+    date:      (none)
+    version:   (none)
+    timescale: (none)
+    comment:   $dumpvars $dumpall $dumpon $dumpoff $dumpports |}]
+
+let%expect_test "a multi-word reference" =
+  show_parse "$scope module m $end $var wire 8 ! mem [3] [7:0] $end $upscope $end $enddefinitions $end";
+  [%expect
+    {|
+    date:      (none)
+    version:   (none)
+    timescale: (none)
+    comment:   (none)
+      scope module m
+        var wire 8 mem [3] [7:0] |}]
+
+let%expect_test "VCD and FST agree on a multi-word reference" =
+  let fst_header =
+    let definition, header = Vcd_fst.collector () in
+    let var name =
+      Fst.Vcd.Var { var_type = "wire"; kind = Fst.Vector; size = 8; id = "!"; handle = 1; alias = false; name }
+    in
+    List.iter definition
+      [
+        Scope { scope_type = "module"; name = "m" }; var "mem [3] [7:0]"; var "x [1]"; var "y"; Upscope; End_definitions;
+      ];
+    header ()
+  in
+  let vcd_header =
+    parse_header
+      "$scope module m $end $var wire 8 ! mem [3] [7:0] $end $var wire 8 ! x [1] $end $var wire 8 ! y $end $upscope \
+       $end $enddefinitions $end"
+  in
+  Printf.printf "%b\n" (fst_header = vcd_header);
+  [%expect {| true |}]
