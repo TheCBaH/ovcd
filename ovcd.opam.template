@@ -1,0 +1,66 @@
+# Test-data archives: one per git submodule, pinned to the exact commit
+# recorded in .gitmodules.  Fetched by opam before the build; extracted
+# into test-data/ only when --with-test is requested.
+extra-source "test-data-vcdvcd.tar.gz" {
+  src:
+    "https://github.com/cirosantilli/vcdvcd/archive/515273543d74da21588785a2b192159c8ac7a66a.tar.gz"
+  checksum: [
+    "sha256=06e86a31c93317d1bad74a91630c57b616cc679668cd47c25e7ab8107131d513"
+  ]
+}
+extra-source "test-data-vcd-io.tar.gz" {
+  src:
+    "https://github.com/erihsu/vcd-io/archive/766b98dec0f581abbb9c93e1cc2913ac86607b1d.tar.gz"
+  checksum: [
+    "sha256=670436ef267ff5f0525c6379c66dcb7992d3c6ef9062057b4b2be97e3778ba11"
+  ]
+}
+extra-source "test-data-pyDigitalWaveTools.tar.gz" {
+  src:
+    "https://github.com/Nic30/pyDigitalWaveTools/archive/d848418b374b8e5b90abd5e23e54a6ad658e7e0b.tar.gz"
+  checksum: [
+    "sha256=6658fa006f488a9f2a540f8b0e4fc7af2a9ae7a6a925b17ae9548f76ceb33e8f"
+  ]
+}
+extra-source "test-data-go-vcd-parser.tar.gz" {
+  src:
+    "https://github.com/filmil/go-vcd-parser/archive/22b3d57623813f58f0ab18dde6530487bcd72eb6.tar.gz"
+  checksum: [
+    "sha256=422ab50de5af4ff7c34615349b212108478d8a1b79041f44496cdf668c0390a0"
+  ]
+}
+build: [
+  ["dune" "subst"] {dev}
+  # Extract test-data archives into the expected submodule locations.
+  ["mkdir" "-p"
+   "test-data/vcdvcd"
+   "test-data/vcd-io"
+   "test-data/pyDigitalWaveTools"
+   "test-data/go-vcd-parser"] {with-test}
+  ["tar" "-xzf" "test-data-vcdvcd.tar.gz"
+   "--strip-components=1" "-C" "test-data/vcdvcd"] {with-test}
+  ["tar" "-xzf" "test-data-vcd-io.tar.gz"
+   "--strip-components=1" "-C" "test-data/vcd-io"] {with-test}
+  ["tar" "-xzf" "test-data-pyDigitalWaveTools.tar.gz"
+   "--strip-components=1" "-C" "test-data/pyDigitalWaveTools"] {with-test}
+  ["tar" "-xzf" "test-data-go-vcd-parser.tar.gz"
+   "--strip-components=1" "-C" "test-data/go-vcd-parser"] {with-test}
+  [
+    "dune"
+    "build"
+    "-p"
+    name
+    "-j"
+    jobs
+    "@install"
+    "@runtest" {with-test}
+    "@doc" {with-doc}
+  ]
+]
+# fst, its unlz4 dependency and zipc (with the unreleased zlib_decompress ~start fix) are
+# not in opam-repository yet; pin-depends is not transitive, so all three are pinned here.
+pin-depends: [
+  ["zipc.dev" "git+https://github.com/dbuenzli/zipc.git#076e6168a222dfe46b7ba598dc87a9a2e58b2569"]
+  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#83ff8b97cd7e889c883bc3519e0b00ecd51c8c63"]
+  ["unlz4.dev" "git+https://github.com/TheCBaH/ocaml-unlz4.git#8db02229baf5bc2f45514618bfd2e07b0708bcf5"]
+]

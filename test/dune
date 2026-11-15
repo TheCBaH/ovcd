@@ -2,6 +2,8 @@
  (name vcd_tests)
  (wrapped false)
  (modules
+  tlexer
+  tparser
   test_binary_value
   test_filter_match
   test_filter_parse
@@ -112,3 +114,20 @@
   ../test-data/vcd-io/testcases/handy2.vcd
   ../test-data/vcd-io/testcases/handy3.vcd
   ../test-data/vcd-io/testcases/wire_types.vcd))
+
+; The library's lexer and parser are private; the token-level tests run on copies.
+
+(rule
+ (action
+  (with-stdout-to
+   tlexer.mll
+   (run sed s/Vcd_parser/Tparser/g %{dep:../lib/vcd_lexer.mll}))))
+
+(rule
+ (copy ../lib/vcd_parser.mly tparser.mly))
+
+(ocamllex
+ (modules tlexer))
+
+(menhir
+ (modules tparser))
