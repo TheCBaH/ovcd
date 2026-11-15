@@ -9,6 +9,7 @@
   test_filter_parse
   test_errors
   test_fst
+  test_fuzz
   test_header_parser
   test_lifetime
   test_lexer
