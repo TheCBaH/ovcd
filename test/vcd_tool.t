@@ -307,14 +307,15 @@ inclusive, including the $dumpvars-initialised counter (bx):
       counter_tb.clock=0
       counter_tb.out=bx
 
+A range that starts after the change does not re-fire the trigger: the
+range-entry snapshot is not a change (reset rose at 1, the range starts at 2):
+
+  $ ./vcd_tool --when 'counter_tb.reset=1' --range 2- ../test-data/vcdvcd/counter_tb.vcd
+
 --lookback N also prints the show signals at the previous N change-timestamps —
 **.clock=1 with lookback 1, restricted to the first few cycles:
 
   $ ./vcd_tool --when '**.clock=1' --show '**.out' --lookback 1 --range 0-6 ../test-data/vcdvcd/counter_tb.vcd
-  @0 counter_tb.top.clock=1
-  @0 counter_tb.clock=1
-      counter_tb.out=bx
-      counter_tb.top.out=bx
   @2 counter_tb.top.clock=1
   @2 counter_tb.clock=1
       counter_tb.out=h0

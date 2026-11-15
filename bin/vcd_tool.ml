@@ -78,8 +78,8 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       let fired =
         List.concat_map
           (fun (id, expected, size, refs) ->
-            match Vcd.ID_map.find_opt id ev.Stateful.changes with
-            | Some v when Vcd_types.Value.get_int ~default:min_int v = expected ->
+            match (ev.Stateful.kind, Vcd.ID_map.find_opt id ev.Stateful.changes) with
+            | `Delta, Some v when Vcd_types.Value.get_int ~default:min_int v = expected ->
                 Vcd.Ref_set.fold
                   (fun r acc ->
                     let display = match strip_map with None -> r | Some f -> f r in

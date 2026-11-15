@@ -208,7 +208,9 @@ that timestamp inclusive* (current changes overlaid on prior state, including
   `0x…`, `0b…`) and compared to the signal's value. `X`/`Z` never match, so an
   all-defined transition is required to fire.
 - **Triggers fire on the change.** The signal must appear in the timestamp's
-  changes with the matching value; a range-entry snapshot counts as a change.
+  changes with the matching value. The range-entry snapshot and `$dumpvars`
+  values are not changes, so they never fire a trigger (they still appear in
+  `--show` output).
 
 ---
 
