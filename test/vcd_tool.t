@@ -410,3 +410,15 @@ Malformed --range specs are usage errors:
   $ ./vcd_tool --range 0x10 ../test-data/pyDigitalWaveTools/tests/example0.vcd
   error: invalid --range "0x10": invalid time "0x10"
   [1]
+
+Flag combinations that would silently do nothing are errors:
+
+  $ ./vcd_tool --signal 'unit0.*' --when 'unit0.sig0=1' ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  error: --signal and --signal-re cannot be combined with --when (use --show)
+  [1]
+  $ ./vcd_tool --show 'unit0.*' ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  error: --show and --lookback require --when
+  [1]
+  $ ./vcd_tool --lookback 2 ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  error: --show and --lookback require --when
+  [1]

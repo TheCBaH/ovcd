@@ -1,12 +1,5 @@
 module Stateful = Vcd.Stateful
 
-let parse_pattern_or_exit r s =
-  match Filter_parser.parse s with
-  | Error msg ->
-      Printf.eprintf "error: invalid signal pattern %S: %s\n" s msg;
-      exit 1
-  | Ok pat -> r := (s, pat) :: !r
-
 let pp_changes resolver strip_map filter ev =
   Vcd.ID_map.iter
     (fun id v ->
@@ -16,7 +9,7 @@ let pp_changes resolver strip_map filter ev =
           let size = Vcd.Resolver.entry_size entry in
           Vcd.Ref_set.iter
             (fun r ->
-              let display = match strip_map with None -> r | Some f -> f r in
+              let display = Tool_cli.display strip_map r in
               Tool_out.assignment "  " (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))
             (Vcd_util.selected_refs resolver filter id))
     ev.Stateful.changes
@@ -54,7 +47,7 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
             let size = Vcd.Resolver.entry_size entry in
             Vcd.Ref_set.fold
               (fun r acc ->
-                let display = match strip_map with None -> r | Some f -> f r in
+                let display = Tool_cli.display strip_map r in
                 (Vcd_types.Reference.to_string display, Vcd_types.Value.to_string_hex size v) :: acc)
               (Vcd_util.selected_refs resolver show_filter id)
               acc
@@ -80,7 +73,7 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
             | `Delta, Some v when Vcd_types.Value.get_int ~default:min_int v = expected ->
                 Vcd.Ref_set.fold
                   (fun r acc ->
-                    let display = match strip_map with None -> r | Some f -> f r in
+                    let display = Tool_cli.display strip_map r in
                     (Vcd_types.Reference.to_string display, Vcd_types.Value.to_string_hex size v) :: acc)
                   refs []
             | _ -> [])
@@ -102,122 +95,72 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       end)
     events
 
-let warn_unmatched ~label (u : Vcd_util.unmatched) =
-  List.iter (Printf.eprintf "warning: %s %S matched no signals\n" label) u.patterns;
-  List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") u.regexes
-
-let with_parsed ?select path f =
-  match Vcd_fst.with_file ?select path f with
-  | v -> v
-  | exception Vcd.Error.E e ->
-      Tool_out.flush ();
-      Printf.eprintf "%s\n" (Vcd_util.error_message e);
-      exit 1
-  | exception Failure msg ->
-      Tool_out.flush ();
-      Printf.eprintf "error: %s\n" msg;
-      exit 1
-
 let main () =
-  let ranges = ref [] in
-  let patterns = ref [] in
-  let regexes = ref [] in
+  let sel = Tool_cli.selection () in
   let strip = ref false in
   let when_specs = ref [] in
   let show_patterns = ref [] in
-  let lookback = ref 0 in
-  let files = ref [] in
+  let lookback = ref None in
   let spec =
-    [
-      ( "--range",
-        Arg.String
-          (fun s ->
-            match Vcd_util.parse_range s with
-            | exception Failure msg ->
-                Printf.eprintf "error: invalid --range %S: %s\n" s msg;
-                exit 1
-            | r -> ranges := r :: !ranges),
-        "SPEC  Restrict to a time range, e.g. \"...1000\" or \"0-500\" or \"2000-...\"; may be repeated" );
-      ( "--signal",
-        Arg.String (parse_pattern_or_exit patterns),
-        "PATTERN  Show only signals matching this DSL pattern (may be repeated)" );
-      ( "--signal-re",
-        Arg.String
-          (fun s ->
-            match Re.Pcre.re s |> Re.compile with
-            | exception exn ->
-                Printf.eprintf "error: invalid regex %S: %s\n" s (Printexc.to_string exn);
-                exit 1
-            | re -> regexes := (s, re) :: !regexes),
-        "REGEX  Show only signals whose full name matches this PCRE regex (may be repeated)" );
-      ("--strip", Arg.Set strip, " Strip the longest common scope prefix from signal names");
-      ( "--when",
-        Arg.String
-          (fun s ->
-            match String.rindex_opt s '=' with
-            | None ->
-                Printf.eprintf "error: --when %S must be of the form PATTERN=VALUE\n" s;
-                exit 1
-            | Some i -> (
-                let pat_s = String.sub s 0 i and value_s = String.sub s (i + 1) (String.length s - i - 1) in
-                match Filter_parser.parse pat_s with
-                | Error msg ->
-                    Printf.eprintf "error: invalid signal pattern %S: %s\n" pat_s msg;
-                    exit 1
-                | Ok pat -> (
-                    match int_of_string_opt (String.trim value_s) with
-                    | None ->
-                        Printf.eprintf "error: --when %S has non-integer value %S\n" s value_s;
-                        exit 1
-                    | Some v -> when_specs := (s, pat, v) :: !when_specs))),
-        "PATTERN=VALUE  Trigger on each timestamp where a matching signal takes VALUE (may be repeated)" );
-      ( "--show",
-        Arg.String
-          (fun s ->
-            String.split_on_char ',' s
-            |> List.iter (fun p ->
-                let p = String.trim p in
-                if p <> "" then parse_pattern_or_exit show_patterns p)),
-        "PATTERNS  Comma-separated signals to print at each --when trigger (may be repeated)" );
-      ( "--lookback",
-        Arg.Int
-          (fun n ->
-            if n < 0 then (
-              Printf.eprintf "error: --lookback must be >= 0\n";
-              exit 1)
-            else lookback := n),
-        "N  Also print --show state at the previous N change-timestamps (default 0)" );
-    ]
+    Tool_cli.selection_specs sel ~signal_doc:"PATTERN  Show only signals matching this DSL pattern (may be repeated)"
+      ~regex_doc:"REGEX  Show only signals whose full name matches this PCRE regex (may be repeated)"
+    @ [
+        ("--strip", Arg.Set strip, " Strip the longest common scope prefix from signal names");
+        ( "--when",
+          Arg.String
+            (fun s ->
+              match String.rindex_opt s '=' with
+              | None -> Tool_cli.fail "error: --when %S must be of the form PATTERN=VALUE" s
+              | Some i -> (
+                  let pat_s = String.sub s 0 i and value_s = String.sub s (i + 1) (String.length s - i - 1) in
+                  match Filter_parser.parse pat_s with
+                  | Error msg -> Tool_cli.fail "error: invalid signal pattern %S: %s" pat_s msg
+                  | Ok pat -> (
+                      match int_of_string_opt (String.trim value_s) with
+                      | None -> Tool_cli.fail "error: --when %S has non-integer value %S" s value_s
+                      | Some v -> when_specs := (s, pat, v) :: !when_specs))),
+          "PATTERN=VALUE  Trigger on each timestamp where a matching signal takes VALUE (may be repeated)" );
+        ( "--show",
+          Arg.String
+            (fun s ->
+              String.split_on_char ',' s
+              |> List.iter (fun p ->
+                  let p = String.trim p in
+                  if p <> "" then Tool_cli.add_pattern show_patterns p)),
+          "PATTERNS  Comma-separated signals to print at each --when trigger (may be repeated)" );
+        ( "--lookback",
+          Arg.Int (fun n -> if n < 0 then Tool_cli.fail "error: --lookback must be >= 0" else lookback := Some n),
+          "N  Also print --show state at the previous N change-timestamps (default 0)" );
+      ]
   in
   let usage =
     "usage: vcd_tool [--range SPEC]... [--signal PATTERN]... [--signal-re REGEX]... [--strip] [--when PATTERN=VALUE \
      --show PATTERNS [--lookback N]]... <file.vcd|file.fst>..."
   in
-  Arg.parse spec (fun f -> files := f :: !files) usage;
-  let files = List.rev !files in
-  let ranges = List.rev !ranges in
-  let patterns = List.rev !patterns in
-  let regexes = List.rev !regexes in
+  let files = Tool_cli.parse_args spec usage in
+  let ranges = List.rev !(sel.ranges) in
+  let patterns = List.rev !(sel.patterns) in
+  let regexes = List.rev !(sel.regexes) in
   let when_specs = List.rev !when_specs in
   let show_patterns = List.rev !show_patterns in
-  let lookback = !lookback in
-  if files = [] then (
-    Arg.usage spec usage;
-    exit 1);
+  let selecting = patterns <> [] || regexes <> [] in
+  Tool_cli.reject (selecting && when_specs <> []) "--signal and --signal-re cannot be combined with --when (use --show)";
+  Tool_cli.reject (when_specs = [] && (show_patterns <> [] || !lookback <> None)) "--show and --lookback require --when";
+  let lookback = Option.value ~default:0 !lookback in
   (* The IDs to read are known only once the header is parsed; the first pull of the simulation asks. *)
   let wanted = ref None in
   let select =
-    if when_specs <> [] || patterns <> [] || regexes <> [] then
+    if when_specs <> [] || selecting then
       Some (fun id -> match !wanted with None -> true | Some s -> Vcd.ID_set.mem id s)
     else None
   in
   List.iter
     (fun path ->
-      with_parsed ?select path @@ fun result ->
+      Tool_cli.with_parsed ?select path @@ fun result ->
       let resolver = Vcd.Resolver.make result.header in
       if when_specs <> [] then begin
         let show_filter, unmatched = Vcd_util.build_filter resolver show_patterns [] in
-        warn_unmatched ~label:"--show" unmatched;
+        Tool_cli.warn_unmatched ~label:"--show" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver show_filter else None in
         let trigger_ids =
           List.fold_left
@@ -235,7 +178,7 @@ let main () =
       end
       else begin
         let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
-        warn_unmatched ~label:"--signal" unmatched;
+        Tool_cli.warn_unmatched ~label:"--signal" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
         wanted := Option.map Vcd_util.filter_ids filter;
         let events =
@@ -252,9 +195,4 @@ let main () =
     files
 
 (* Value changes are parsed lazily, so their errors surface while iterating. *)
-let () =
-  try main ()
-  with Vcd.Error.E e ->
-    Tool_out.flush ();
-    Printf.eprintf "%s\n" (Vcd_util.error_message e);
-    exit 1
+let () = Tool_cli.run main
