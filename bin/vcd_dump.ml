@@ -175,7 +175,7 @@ let main () =
           warn_unmatched ~label:"--signal" unmatched;
           filter_ref := filter;
           let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
-          let resolve id =
+          let names_of id =
             match Vcd.Resolver.find resolver id with
             | None -> ([ Vcd_types.ID.to_string id ], 0)
             | Some entry ->
@@ -189,6 +189,15 @@ let main () =
                     []
                 in
                 (names, size)
+          in
+          let cache = Hashtbl.create 256 in
+          let resolve id =
+            match Hashtbl.find_opt cache id with
+            | Some r -> r
+            | None ->
+                let r = names_of id in
+                Hashtbl.add cache id r;
+                r
           in
           let cur_in_range = ref (ranges = []) in
           let pending_ts = ref None in
