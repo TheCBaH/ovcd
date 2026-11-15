@@ -329,8 +329,8 @@ let%expect_test "no timezero" =
 let%expect_test "a timezero that is not an integer is a parse error" =
   (match Vcd.parse_string "$timezero soon $end $enddefinitions $end" with
   | _ -> print_endline "parsed"
-  | exception Vcd.Parse_error msg -> print_endline msg);
-  [%expect {| invalid $timezero: soon |}]
+  | exception Vcd.Error.E e -> print_endline (Vcd.Error.to_string e));
+  [%expect {| invalid $timezero: soon at <string> line 1 col 0 |}]
 
 let%expect_test "var_type_of_keyword and scope_type_of_keyword agree with the parser" =
   let var_types =

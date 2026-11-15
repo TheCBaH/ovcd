@@ -63,11 +63,8 @@ let () =
       let r =
         match Vcd_fst.open_file path with
         | r -> r
-        | exception Vcd.Parse_error msg ->
-            Printf.eprintf "parse error: %s\n" msg;
-            exit 1
-        | exception Sys_error msg ->
-            Printf.eprintf "%s\n" msg;
+        | exception Vcd.Error.E e ->
+            Printf.eprintf "%s\n" (Vcd_util.error_message e);
             exit 1
       in
       let resolver = Vcd.Resolver.make r.header in

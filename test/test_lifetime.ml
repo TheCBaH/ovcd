@@ -34,7 +34,7 @@ let%expect_test "parse_file closes at end of input" =
 
 let%expect_test "parse_file closes on a header error" =
   with_temp "$scope $end\n" (fun path ->
-      Printf.printf "%b\n" (leaked (fun () -> try ignore (Vcd.parse_file path) with Vcd.Parse_error _ -> ()) < 10));
+      Printf.printf "%b\n" (leaked (fun () -> try ignore (Vcd.parse_file path) with Vcd.Error.E _ -> ()) < 10));
   [%expect {| true |}]
 
 let twice name (r : Vcd.parse_result) =

@@ -19,18 +19,21 @@ let detect_string s : format =
   else `Vcd
 
 let detect_file path =
-  In_channel.with_open_bin path (fun ic ->
-      let b = Bytes.create (17 + String.length header_block) in
-      let rec fill n =
-        if n = Bytes.length b then n
-        else match In_channel.input ic b n (Bytes.length b - n) with 0 -> n | k -> fill (n + k)
-      in
-      detect_string (Bytes.sub_string b 0 (fill 0)))
+  try
+    In_channel.with_open_bin path (fun ic ->
+        let b = Bytes.create (17 + String.length header_block) in
+        let rec fill n =
+          if n = Bytes.length b then n
+          else match In_channel.input ic b n (Bytes.length b - n) with 0 -> n | k -> fill (n + k)
+        in
+        detect_string (Bytes.sub_string b 0 (fill 0)))
+  with Sys_error m -> raise (Vcd.Error.E (`Io m))
 
 (* Text as the header grammar reads it: whitespace-separated words joined by single spaces. *)
 let words s =
   String.map (function '\t' | '\r' | '\n' -> ' ' | c -> c) s |> String.split_on_char ' ' |> List.filter (( <> ) "")
 
+let fst_exn name e = Vcd.Error.E (if Fst.Error.kind e = Fst.Error.Io then `Io (Fst.Error.message e) else `Fst (name, e))
 let text s = match words s with [] -> None | ws -> Some (String.concat " " ws)
 
 type open_scope = {
@@ -156,11 +159,10 @@ module File = struct
     mutable closed : bool;
   }
 
-  let error t e = Vcd.Parse_error (Printf.sprintf "%s: %s" t.name (Fst.Error.to_string e))
+  let error t e = fst_exn t.name e
 
   let make ~name = function
-    | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
-    | Error e -> raise (Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)))
+    | Error e -> raise (fst_exn name e)
     | Ok fst -> { name; fst; ids = None; header = None; builds = 0; epoch = 0; closed = false }
 
   let close t =
@@ -169,12 +171,9 @@ module File = struct
     Fst.close t.fst
 
   let open_ path =
-    match
-      if detect_file path = `Vcd then invalid_arg "Vcd_fst.File.open_: not an FST file";
-      make ~name:path (Fst.open_file path)
-    with
-    | t -> Ok t
-    | exception (Sys_error m | Vcd.Parse_error m) -> Error m
+    Vcd.Error.catch (fun () ->
+        if detect_file path = `Vcd then raise (Vcd.Error.E (`Not_fst path));
+        make ~name:path (Fst.open_file path))
 
   let ids t =
     match t.ids with
@@ -188,8 +187,8 @@ module File = struct
             ids)
 
   let live t epoch () =
-    if t.closed then raise (Vcd.Parse_error (t.name ^ ": handle closed"))
-    else if t.epoch <> epoch then raise (Vcd.Parse_error (t.name ^ ": stream superseded"))
+    if t.closed then raise (Vcd.Error.E (`Closed t.name))
+    else if t.epoch <> epoch then raise (Vcd.Error.E (`Superseded t.name))
 
   let header t =
     match t.header with
@@ -232,17 +231,15 @@ module File = struct
     (state, seq)
 
   let blocks t =
-    match live t t.epoch () with
-    | exception Vcd.Parse_error m -> Error m
-    | () -> (
+    Vcd.Error.catch (fun () ->
+        live t t.epoch ();
         match Fst.blocks t.fst with
-        | Error e -> Error (Printf.sprintf "%s: %s" t.name (Fst.Error.to_string e))
+        | Error e -> raise (error t e)
         | Ok bs ->
-            Ok
-              (Array.map
-                 (fun (b : Fst.block) ->
-                   (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
-                 bs))
+            Array.map
+              (fun (b : Fst.block) ->
+                (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
+              bs)
 
   let header_builds t = t.builds
 end
@@ -296,18 +293,25 @@ let with_file ?select path f =
       let t, r = parse_t ?select ~name:path (Fst.open_file path) in
       Fun.protect ~finally:(fun () -> File.close t) (fun () -> f r)
 
-(* A private handle on an FST for [fn]; [Invalid_argument] for a VCD. *)
-let private_file ~fn path =
-  if detect_file path = `Vcd then invalid_arg (fn ^ ": not an FST file");
+(* A private handle on an FST; [Not_fst] for a VCD. *)
+let private_file path =
+  if detect_file path = `Vcd then raise (Vcd.Error.E (`Not_fst path));
   File.make ~name:path (Fst.open_file path)
 
 let blocks path =
-  let t = private_file ~fn:"Vcd_fst.blocks" path in
+  let t = private_file path in
   let r = File.blocks t in
   File.close t;
-  match r with Ok bs -> bs | Error m -> raise (Vcd.Parse_error m)
+  match r with Ok bs -> bs | Error e -> raise (Vcd.Error.E e)
 
 let open_at ?select path ~time =
-  let t = private_file ~fn:"Vcd_fst.open_at" path in
+  let t = private_file path in
   let state, r = start ?select ~at:time t in
   (state, { r with simulation = owning t r.simulation })
+
+let parse_string_result ?select s = Vcd.Error.catch (fun () -> parse_string ?select s)
+let parse_file_result ?select path = Vcd.Error.catch (fun () -> parse_file ?select path)
+let open_string_result ?select s = Vcd.Error.catch (fun () -> open_string ?select s)
+let open_file_result ?select path = Vcd.Error.catch (fun () -> open_file ?select path)
+let blocks_result path = Vcd.Error.catch (fun () -> blocks path)
+let open_at_result ?select path ~time = Vcd.Error.catch (fun () -> open_at ?select path ~time)

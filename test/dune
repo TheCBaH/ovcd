@@ -5,6 +5,7 @@
   test_binary_value
   test_filter_match
   test_filter_parse
+  test_errors
   test_fst
   test_header_parser
   test_lifetime

@@ -5,13 +5,11 @@
 let header = "$timescale 1ns $end\n$scope module tb $end\n$var wire 1 ! clk $end\n$upscope $end\n$enddefinitions $end\n"
 let body = "#0\n$dumpvars\n0!\n$end\n#5\n1!\n"
 
-(* Position-free outcome: the simulation is pulled to its end. *)
+(* Outcome without the position: the simulation is pulled to its end. *)
 let outcome parse =
   match Seq.length (parse ()).Vcd.simulation with
   | n -> Printf.printf "ok, %d events\n" n
-  | exception Vcd.Parse_error msg ->
-      let rec cut i = if String.sub msg i 5 = " at <" then i else cut (i + 1) in
-      Printf.printf "Parse_error: %s\n" (String.sub msg 0 (cut 0))
+  | exception Vcd.Error.E (`Incomplete (_, msg)) -> Printf.printf "Incomplete: %s\n" msg
 
 let both s =
   outcome (fun () -> Vcd.parse_string s);
@@ -33,25 +31,25 @@ let%expect_test "header without $enddefinitions" =
   both "$timescale 1ns $end\n$scope module tb $end\n$var wire 1 ! clk $end\n$upscope $end\n";
   [%expect {|
     ok, 0 events
-    Parse_error: missing $enddefinitions |}]
+    Incomplete: missing $enddefinitions |}]
 
 let%expect_test "open dump block at end of input" =
   both (header ^ "#0\n$dumpvars\n0!\n");
   [%expect {|
     ok, 3 events
-    Parse_error: unterminated dump block at end of input |}]
+    Incomplete: unterminated dump block at end of input |}]
 
 let%expect_test "missing final newline" =
   both (header ^ "#0\n$dumpvars\n0!\n$end\n#5\n1!");
   [%expect {|
     ok, 6 events
-    Parse_error: input does not end with a newline |}]
+    Incomplete: input does not end with a newline |}]
 
 let%expect_test "cut inside a record" =
   both (header ^ "#0\n$dumpvars\n0!\n$end\n#12");
   [%expect {|
     ok, 5 events
-    Parse_error: input does not end with a newline |}]
+    Incomplete: input does not end with a newline |}]
 
 let%expect_test "cut at a record boundary is complete" =
   both (header ^ "#0\n$dumpvars\n0!\n$end\n");
@@ -68,7 +66,7 @@ let%expect_test "channel input" =
   [%expect
     {|
     ok, 6 events
-    Parse_error: missing $enddefinitions
-    Parse_error: unterminated dump block at end of input
-    Parse_error: input does not end with a newline
-    Parse_error: missing $enddefinitions |}]
+    Incomplete: missing $enddefinitions
+    Incomplete: unterminated dump block at end of input
+    Incomplete: input does not end with a newline
+    Incomplete: missing $enddefinitions |}]

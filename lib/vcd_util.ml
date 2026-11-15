@@ -161,3 +161,4 @@ let parse_range s : Vcd.time_range =
 
 let in_ranges = Vcd.in_ranges
 let past_all_ranges = Vcd.past_all_ranges
+let error_message : Vcd.Error.error -> string = function `Io m -> m | e -> "parse error: " ^ Vcd.Error.to_string e

@@ -22,6 +22,12 @@ invalidated by the next stream or by `close`. Both tools accept either format. o
 FST files: damaged chain tables and invalid time-table trailers are errors
 here, where GTKWave skips the block.
 
+Every failure is a `Vcd.Error.E` of a typed `Vcd.Error.error` (syntax and strict errors
+with their file, line and column; FST errors with their kind and offset; I/O
+errors), raised from the entry points and from pulling the simulation.
+`Vcd.parse_string_result`, `Vcd_fst.open_file_result` and the like return the
+errors raised before the simulation starts; `Vcd.Error.pp_error` prints one.
+
 Two command-line tools are included — `vcd_dump` (structural: hierarchy, signal
 listings, raw value stream) and `vcd_tool` (stateful: per-step state and
 relational `--when`/`--show` queries). See the [CLI guide](doc/cli-guide.md) for

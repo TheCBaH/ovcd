@@ -100,7 +100,7 @@ timezero_decl:
   | KW_TIMEZERO w = word_token KW_END
       { match Int64.of_string_opt w with
         | Some t -> t
-        | None   -> failwith ("invalid $timezero: " ^ w) }
+        | None   -> Vcd_error.located $startpos ("invalid $timezero: " ^ w) }
 
 timescale_decl:
   | KW_TIMESCALE ws = nonempty_list(word_token) KW_END { String.concat " " ws }
@@ -190,7 +190,7 @@ var_decl:
       { { v_type = vtype
         ; size   = (match int_of_string_opt size with
                     | Some n -> n
-                    | None   -> failwith ("invalid var size: " ^ size))
+                    | None   -> Vcd_error.located $startpos ("invalid var size: " ^ size))
         ; id     = Vcd_types.ID.of_string id
         ; ref    = ref_
         ; index  = idx } }
