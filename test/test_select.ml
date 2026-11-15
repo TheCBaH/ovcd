@@ -100,3 +100,24 @@ let%expect_test "undeclared IDs are dropped, and selecting nothing keeps every o
     #0 $dumpvars !=0 "=b0 #=0.5 $end #5 !=1 #10 "=b1010 $comment only b #15 #=1.5 !=0
     #0 $dumpvars $end #5 #10 $comment only b #15
     |}]
+
+let%expect_test "build_filter returns the unmatched patterns" =
+  let resolver = Vcd.Resolver.make (Vcd.parse_string vcd).header in
+  let pat s = (s, Result.get_ok (Filter_parser.parse s)) in
+  let re s = (s, Re.compile (Re.Pcre.re s)) in
+  let filter, unmatched =
+    Vcd_util.build_filter resolver [ pat "tb.a"; pat "tb.nope"; pat "tb.sub.a_alias" ] [ re "b$"; re "zz"; re "^q" ]
+  in
+  let ids =
+    Option.fold ~none:"all"
+      ~some:(fun f -> Vcd_util.filter_ids f |> Vcd.ID_set.elements |> List.map ID.to_string |> String.concat ",")
+      filter
+  in
+  Printf.printf "ids %s\npatterns %s\nregexes %s\n" ids (String.concat "," unmatched.patterns)
+    (String.concat "," unmatched.regexes);
+  Printf.printf "no filter: %b\n" (fst (Vcd_util.build_filter resolver [] []) = None);
+  [%expect {|
+    ids !,"
+    patterns tb.nope
+    regexes zz,^q
+    no filter: true |}]

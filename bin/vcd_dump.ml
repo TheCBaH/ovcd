@@ -25,6 +25,10 @@ let parse_pattern_or_exit r s =
       exit 1
   | Ok pat -> r := (s, pat) :: !r
 
+let warn_unmatched ~label (u : Vcd_util.unmatched) =
+  List.iter (Printf.eprintf "warning: %s %S matched no signals\n" label) u.patterns;
+  List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") u.regexes
+
 let with_parsed ?select path f =
   match Vcd_fst.with_file ?select path f with
   | v -> v
@@ -123,7 +127,8 @@ let main () =
         with_parsed path @@ fun parsed ->
         let h = parsed.header in
         let resolver = Vcd.Resolver.make h in
-        let filter = Vcd_util.build_filter ~pattern_label:"--list-signals" resolver list_signals [] in
+        let filter, unmatched = Vcd_util.build_filter resolver list_signals [] in
+        warn_unmatched ~label:"--list-signals" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
         let rows =
           Vcd.Resolver.fold
@@ -154,8 +159,8 @@ let main () =
           with_parsed ?select path @@ fun r ->
           if !resolve then begin
             let resolver = Vcd.Resolver.make r.header in
-            let filter = Vcd_util.build_filter resolver patterns regexes in
-            filter_ref := filter;
+            let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+            warn_unmatched ~label:"--signal" unmatched;
             filter_ref := filter;
             Seq.iter (function Change (id, _) when show_id filter id -> () | _ -> ()) r.simulation
           end
@@ -167,7 +172,8 @@ let main () =
         let h = result.header in
         if !resolve then begin
           let resolver = Vcd.Resolver.make h in
-          let filter = Vcd_util.build_filter resolver patterns regexes in
+          let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+          warn_unmatched ~label:"--signal" unmatched;
           filter_ref := filter;
           let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
           let resolve id =

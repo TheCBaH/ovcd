@@ -104,6 +104,10 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       end)
     events
 
+let warn_unmatched ~label (u : Vcd_util.unmatched) =
+  List.iter (Printf.eprintf "warning: %s %S matched no signals\n" label) u.patterns;
+  List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") u.regexes
+
 let with_parsed ?select path f =
   match Vcd_fst.with_file ?select path f with
   | v -> v
@@ -215,7 +219,8 @@ let main () =
       with_parsed ?select path @@ fun result ->
       let resolver = Vcd.Resolver.make result.header in
       if when_specs <> [] then begin
-        let show_filter = Vcd_util.build_filter ~pattern_label:"--show" resolver show_patterns [] in
+        let show_filter, unmatched = Vcd_util.build_filter resolver show_patterns [] in
+        warn_unmatched ~label:"--show" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver show_filter else None in
         let trigger_ids =
           List.fold_left
@@ -232,7 +237,8 @@ let main () =
         correlate resolver strip_map ~when_specs ~show_filter ~lookback events
       end
       else begin
-        let filter = Vcd_util.build_filter resolver patterns regexes in
+        let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+        warn_unmatched ~label:"--signal" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
         wanted := Option.map Vcd_util.filter_ids filter;
         let events =

@@ -71,7 +71,9 @@ let () =
             exit 1
       in
       let resolver = Vcd.Resolver.make r.header in
-      let filter = Vcd_util.build_filter resolver patterns regexes in
+      let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+      List.iter (Printf.eprintf "warning: --signal %S matched no signals\n") unmatched.patterns;
+      List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") unmatched.regexes;
       let count = Vcd.Resolver.fold (fun _ n -> n + 1) resolver 0 in
       Printf.printf "Signals: %d\n" count;
       let events =
