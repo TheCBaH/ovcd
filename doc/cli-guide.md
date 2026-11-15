@@ -50,6 +50,10 @@ for every component of a signal's hierarchical name.
 | `tb.**` | `tb` and all descendants |
 | `**` | every signal |
 | `*wr_strb*` (intra-segment) | one component containing `wr_strb` |
+| `tb.a\.b.x` | a backslash makes the next byte literal: the component `a.b` |
+
+Any byte above 126 (UTF-8 names) is an ordinary name character. Escape `. * { } ,`,
+spaces and `\` itself with a backslash.
 
 Flags accepting patterns are repeatable and combine with OR. A pattern that
 matches nothing prints a warning to stderr (naming the flag) but is not fatal.

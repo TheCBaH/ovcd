@@ -314,3 +314,16 @@ let%expect_test "name_pattern: first part is anchored at the start" =
     Test_MIPS.co*.pc !> Test_MIPS.disco.pc
     b*a* !> xba
   |}]
+
+let%expect_test "escapes match the literal characters" =
+  let r = Reference.of_list [ "top"; "a.b"; "x*" ] in
+  List.iter
+    (fun p -> Printf.printf "%s %b\n" p (Filter_matcher.matches (pat p) r))
+    [ {|top.a\.b.x\*|}; {|top.a.b.x\*|}; {|top.a\.b.x*|}; {|top.a\.b.x\**|}; {|top.*.x\*|} ];
+  [%expect
+    {|
+    top.a\.b.x\* true
+    top.a.b.x\* false
+    top.a\.b.x* true
+    top.a\.b.x\** true
+    top.*.x\* true |}]

@@ -184,3 +184,43 @@ let%expect_test "parse_exn — raises on error" =
       Printf.printf "raised: %b\n" (starts_with "Filter_parser.parse_exn")
   | _ -> Printf.printf "no exception\n");
   [%expect {| raised: true |}]
+
+(* ------------------------------------------------------------------ *)
+(*  Escapes and high bytes                                              *)
+(* ------------------------------------------------------------------ *)
+
+let%expect_test "backslash escapes a metacharacter" =
+  show {|a\.b.c|};
+  show {|a\*|};
+  show {|\*\*|};
+  show {|{a\,b,c\}}|};
+  show {|a\\b|};
+  show {|\ x|};
+  [%expect {|
+    a\.b.c
+    a\*
+    \*\*
+    {a\,b,c\}}
+    a\\b
+    \ x
+  |}]
+
+let%expect_test "an escaped star is not a glob" =
+  show {|a\**|};
+  (match Filter_parser.parse {|a\**|} with Ok [ Name_pattern p ] -> List.iter (Printf.printf "[%s]") p | _ -> ());
+  print_newline ();
+  [%expect {|
+    a\**
+    [a*][]
+  |}]
+
+let%expect_test "bytes above 126 are name characters" =
+  show "tb.\xc3\xa9";
+  Printf.printf "%b\n" (Result.is_ok (Filter_parser.parse "\xff\x7f"));
+  [%expect {|
+    tb.é
+    true |}]
+
+let%expect_test "error — dangling backslash" =
+  show {|a\|};
+  [%expect {| ERROR: dangling backslash |}]
