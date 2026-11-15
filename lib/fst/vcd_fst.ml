@@ -42,175 +42,244 @@ type open_scope = {
 
 let close_scope o = { s_type = o.st; s_name = o.name; vars = List.rev o.o_vars; children = List.rev o.o_children }
 
-(* The header, and for each handle (index [handle - 1]) its ID and whether it is a port. *)
-let definitions t =
-  let h = Fst.header t in
+(* Builds the header from the definitions the reader's first step passes. *)
+let collector () =
   let stack = ref [] and top = ref [] and comment = ref None in
-  let ids = ref [] and ports = ref [] in
+  let date = ref None and version = ref None and timescale = ref None and timezero = ref None in
   let add_scope s = match !stack with o :: _ -> o.o_children <- s :: o.o_children | [] -> top := s :: !top in
-  let entry () = function
-    | Fst.Hier.Scope { scope_type; name; _ } ->
-        let kw = Option.value (Fst.Hier.scope_type_name scope_type) ~default:"module" in
-        stack := { st = scope_type_of_keyword kw; name; o_vars = []; o_children = [] } :: !stack
-    | Upscope -> (
-        match !stack with
-        | o :: rest ->
-            stack := rest;
-            add_scope (close_scope o)
-        | [] -> ())
-    | Attr_begin { attr_type = 0; subtype = 0; name; _ } when !stack = [] ->
-        comment := Some (String.concat " " (words (if name = "" then "\"\"" else name)))
+  let close () =
+    match !stack with
+    | o :: rest ->
+        stack := rest;
+        add_scope (close_scope o)
+    | [] -> ()
+  in
+  let definition = function
+    | Fst.Vcd.Date s -> date := text s
+    | Version s -> version := text s
+    | Timezero z -> timezero := Some z
+    | Timescale s -> timescale := Some s
+    | Scope { scope_type; name } ->
+        stack := { st = scope_type_of_keyword scope_type; name; o_vars = []; o_children = [] } :: !stack
+    | Upscope -> close ()
+    | Comment s -> if !stack = [] then comment := Some (String.concat " " (words s))
     | Attr_begin _ | Attr_end -> ()
-    | Var { var_type; name; length; handle; alias; _ } -> (
-        let id = Vcd_types.ID.of_string (Fst.Vcd.id handle) in
-        let kw = Fst.Hier.var_type_name var_type in
-        if not alias then begin
-          ids := id :: !ids;
-          ports := (kw = Some "port") :: !ports
-        end;
-        let v_type = match kw with Some kw -> var_type_of_keyword kw | None -> Other_type (string_of_int var_type) in
+    | Var { var_type; size; id; name; _ } -> (
         let r, index =
           match words name with
           | r :: (_ :: _ as rest) -> (r, Some (String.concat " " rest))
           | [ r ] -> (r, None)
           | [] -> (name, None)
         in
-        let v = { v_type; size = Fst.Vcd.var_length ~var_type ~length; id; ref = r; index } in
+        let v = { v_type = var_type_of_keyword var_type; size; id = Vcd_types.ID.of_string id; ref = r; index } in
         match !stack with o :: _ -> o.o_vars <- v :: o.o_vars | [] -> ())
+    | End_definitions ->
+        while !stack <> [] do
+          close ()
+        done
   in
-  match Fst.fold_hierarchy t ~init:() ~f:entry with
-  | Error _ as e -> e
-  | Ok () ->
-      let rec unwind () =
-        match !stack with
-        | o :: rest ->
-            stack := rest;
-            add_scope (close_scope o);
-            unwind ()
-        | [] -> ()
-      in
-      unwind ();
-      let header =
-        {
-          version = text h.version;
-          date = text h.date;
-          timescale = Some (Fst.Vcd.timescale h.timescale);
-          timezero = (if Int64.equal h.timezero 0L then None else Some h.timezero);
-          comment = !comment;
-          scopes = List.rev !top;
-        }
-      in
-      let arr l = Array.of_list (List.rev l) in
-      Ok (header, arr !ids, arr !ports)
+  let header () =
+    {
+      version = !version;
+      date = !date;
+      timescale = !timescale;
+      timezero = !timezero;
+      comment = !comment;
+      scopes = List.rev !top;
+    }
+  in
+  (definition, header)
 
-(* Events in the order, and with the [$dumpvars] and [$dumpon]/[$dumpoff] placement, of fst2vcd's output. *)
-let events ?select ?(block = 0) t ~error ~ids ~ports =
+let events ?select ?(block = 0) t ~error ~live ~ids ~definition =
   let resume = block > 0 in
   let q = Queue.create () in
   let push e = Queue.push e q in
   let id h = if h >= 1 && h <= Array.length ids then ids.(h - 1) else Vcd_types.ID.of_string (Fst.Vcd.id h) in
-  let port h = h >= 1 && h <= Array.length ports && ports.(h - 1) in
   (* A resumed stream has no [$dumpvars]: the frame's values go to [state] instead of the queue. *)
-  let dumpvars = ref (if resume then 2 else 0) in
-  let in_frame = ref false and state = ref Vcd.ID_map.empty and first_time = ref resume in
+  let in_frame = ref false and state = ref Vcd.ID_map.empty in
   let change h v = if !in_frame then state := Vcd.ID_map.add (id h) v !state else push (Change (id h, v)) in
-  let blackouts = Array.of_list (Fst.blackouts t) and cur = ref 0 in
-  let new_time time =
-    if !dumpvars = 1 then begin
-      push DumpEnd;
-      dumpvars := 2
-    end;
-    push (Timestamp (Vcd_types.Timestamp.of_int64 time));
-    if !dumpvars = 0 then begin
-      push (DumpStart "dumpvars");
-      dumpvars := 1
-    end
-  in
-  let blackout time =
-    if !cur < Array.length blackouts then begin
-      let bt, on = blackouts.(!cur) in
-      if Int64.equal bt time then begin
-        push (DumpStart (if on then "dumpon" else "dumpoff"));
-        push DumpEnd;
-        incr cur
-      end
-    end
-  in
+  (* [ignore_sink] keeps the build working when a field is added. *)
   let sink =
     {
-      Fst.time =
+      Fst.Vcd.ignore_sink with
+      definition;
+      time =
         (fun time ->
           in_frame := false;
-          if !first_time then begin
-            first_time := false;
-            while !cur < Array.length blackouts && Int64.compare (fst blackouts.(!cur)) time < 0 do
-              incr cur
-            done
-          end;
-          new_time time;
-          blackout time);
-      frame =
-        (fun time ->
-          if resume then in_frame := true
-          else begin
-            if not (Int64.equal time 0L) then new_time time;
-            blackout time
-          end);
+          push (Timestamp (Vcd_types.Timestamp.of_int64 time)));
+      frame = (fun _ -> in_frame := true);
+      dump =
+        (function
+        | Fst.Vcd.Dumpvars -> push (DumpStart "dumpvars")
+        | Dumpvars_end -> push DumpEnd
+        | Dumpon ->
+            push (DumpStart "dumpon");
+            push DumpEnd
+        | Dumpoff ->
+            push (DumpStart "dumpoff");
+            push DumpEnd);
       bit =
         (fun h c -> change h (try scalar_of_char c with Value.InvalidLogicChar _ -> Value.Other (String.make 1 c)));
-      vector =
-        (fun h s off len ->
-          let v = Bytes.sub_string s off len in
-          change h (if port h then Value.Port v else binary_value v));
+      vector = (fun h s off len -> change h (binary_value (Bytes.sub_string s off len)));
+      packed = Some (fun h b off width -> change h (packed_value b off width));
+      port = (fun h s off len -> change h (Value.Port (Bytes.sub_string s off len)));
       real = (fun h d -> change h (Value.Real d));
       varlen = (fun h s off len -> change h (Value.String (Fst.Vcd.escape s off len)));
     }
-  in
-  let packed h b off width =
-    change h
-      (if port h then
-         Value.Port
-           (String.init width (fun j ->
-                if (Char.code (Bytes.get b (off + (j lsr 3))) lsr (7 - (j land 7))) land 1 = 1 then '1' else '0'))
-       else packed_value b off width)
+    [@warning "-23"]
   in
   let select = Option.map (fun f h -> f (id h)) select in
-  match if resume then Fst.reader_at ?select ~packed t sink ~block else Fst.reader ?select ~packed t sink with
+  match Fst.Vcd.reader ~extensions:true ?select ~block t sink with
   | Error e -> raise (error e)
   | Ok r ->
       let rec next () =
+        live ();
         match Queue.take_opt q with
         | Some e -> Seq.Cons (e, next)
-        | None -> (
-            match Fst.step r with
-            | Ok true -> next ()
-            | Ok false ->
-                Fst.close t;
-                Seq.Nil
-            | Error e -> raise (error e))
+        | None -> ( match Fst.Vcd.step r with Ok true -> next () | Ok false -> Seq.Nil | Error e -> raise (error e))
       in
-      (* A resumed stream's state is complete once the first block's frame and its first [time] have been
-         delivered, so that step is taken now. *)
-      if resume then
-        begin match Fst.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e)
-        end;
+      (* The first step passes the definitions. A resumed stream's state is complete once the first block's frame
+         and its first [time] have been delivered, so the second step is taken now. *)
+      let step () = match Fst.Vcd.step r with Ok _ -> () | Error e -> raise (error e) in
+      step ();
+      if resume then step ();
       (!state, Seq.once next)
 
-let parse_t ?select ~name opened =
-  let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)) in
-  match opened with
-  | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
-  | Error e -> raise (error e)
-  | Ok t -> (
-      let error e =
-        Fst.close t;
-        error e
-      in
-      match definitions t with
-      | Error e -> raise (error e)
-      | Ok (header, ids, ports) -> (t, { Vcd.header; simulation = snd (events ?select t ~error ~ids ~ports) }))
+module File = struct
+  type t = {
+    name : string;
+    fst : Fst.t;
+    mutable ids : Vcd_types.ID.t array option;
+    mutable header : Vcd_ast.header option;
+    mutable builds : int;
+    mutable epoch : int;
+    mutable closed : bool;
+  }
 
-let parse ?select ~name opened = snd (parse_t ?select ~name opened)
+  let error t e = Vcd.Parse_error (Printf.sprintf "%s: %s" t.name (Fst.Error.to_string e))
+
+  let make ~name = function
+    | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
+    | Error e -> raise (Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)))
+    | Ok fst -> { name; fst; ids = None; header = None; builds = 0; epoch = 0; closed = false }
+
+  let close t =
+    t.closed <- true;
+    t.epoch <- t.epoch + 1;
+    Fst.close t.fst
+
+  let open_ path =
+    match
+      if detect_file path = `Vcd then invalid_arg "Vcd_fst.File.open_: not an FST file";
+      make ~name:path (Fst.open_file path)
+    with
+    | t -> Ok t
+    | exception (Sys_error m | Vcd.Parse_error m) -> Error m
+
+  let ids t =
+    match t.ids with
+    | Some ids -> ids
+    | None -> (
+        match Fst.signals t.fst with
+        | Error e -> raise (error t e)
+        | Ok sigs ->
+            let ids = Array.init (Array.length sigs) (fun i -> Vcd_types.ID.of_string (Fst.Vcd.id (i + 1))) in
+            t.ids <- Some ids;
+            ids)
+
+  let live t epoch () =
+    if t.closed then raise (Vcd.Parse_error (t.name ^ ": handle closed"))
+    else if t.epoch <> epoch then raise (Vcd.Parse_error (t.name ^ ": stream superseded"))
+
+  let header t =
+    match t.header with
+    | Some h -> h
+    | None -> (
+        live t t.epoch ();
+        let definition, header = collector () in
+        match Fst.Vcd.reader ~extensions:true t.fst { Fst.Vcd.ignore_sink with definition } with
+        | Error e -> raise (error t e)
+        | Ok r -> (
+            match Fst.Vcd.step r with
+            | Error e -> raise (error t e)
+            | Ok _ ->
+                let h = header () in
+                t.builds <- t.builds + 1;
+                t.header <- Some h;
+                h))
+
+  let block_at t time =
+    let time = Vcd_types.Timestamp.to_int64 time in
+    match Fst.blocks t.fst with
+    | Error e -> raise (error t e)
+    | Ok [||] -> 0
+    | Ok bs -> (
+        let k = ref 0 in
+        Array.iteri (fun i (b : Fst.block) -> if Int64.compare b.start_time time <= 0 then k := i) bs;
+        match Fst.aligned_block t.fst !k with Ok j -> j | Error e -> raise (error t e))
+
+  let stream ?select ?at t =
+    live t t.epoch ();
+    let ids = ids t in
+    let block = match at with None -> 0 | Some time -> block_at t time in
+    t.epoch <- t.epoch + 1;
+    let definition, header = if t.header = None then collector () else (ignore, fun () -> assert false) in
+    let state, seq = events ?select ~block t.fst ~error:(error t) ~live:(live t t.epoch) ~ids ~definition in
+    if t.header = None then begin
+      t.header <- Some (header ());
+      t.builds <- t.builds + 1
+    end;
+    (state, seq)
+
+  let blocks t =
+    match live t t.epoch () with
+    | exception Vcd.Parse_error m -> Error m
+    | () -> (
+        match Fst.blocks t.fst with
+        | Error e -> Error (Printf.sprintf "%s: %s" t.name (Fst.Error.to_string e))
+        | Ok bs ->
+            Ok
+              (Array.map
+                 (fun (b : Fst.block) ->
+                   (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
+                 bs))
+
+  let header_builds t = t.builds
+end
+
+(* A stream over a private handle, which it closes at its end and when a pull raises. *)
+let owning t seq =
+  let rec wrap s () =
+    match s () with
+    | Seq.Cons (e, k) -> Seq.Cons (e, wrap k)
+    | Seq.Nil ->
+        File.close t;
+        Seq.Nil
+    | exception ex ->
+        File.close t;
+        raise ex
+  in
+  Seq.once (wrap seq)
+
+(* A stream over a handle, closing it if starting raises. *)
+let start ?select ?at t =
+  match
+    let state, simulation = File.stream ?select ?at t in
+    (state, { Vcd.header = File.header t; simulation })
+  with
+  | v -> v
+  | exception ex ->
+      File.close t;
+      raise ex
+
+let parse_t ?select ~name opened =
+  let t = File.make ~name opened in
+  (t, snd (start ?select t))
+
+let parse ?select ~name opened =
+  let t, r = parse_t ?select ~name opened in
+  { r with simulation = owning t r.simulation }
+
 let parse_string ?select s = parse ?select ~name:"<string>" (Fst.of_string s)
 let parse_file ?select path = parse ?select ~name:path (Fst.open_file path)
 
@@ -225,47 +294,20 @@ let with_file ?select path f =
   | `Vcd -> Vcd.with_file ?select path f
   | `Fst ->
       let t, r = parse_t ?select ~name:path (Fst.open_file path) in
-      Fun.protect ~finally:(fun () -> Fst.close t) (fun () -> f r)
+      Fun.protect ~finally:(fun () -> File.close t) (fun () -> f r)
 
-(* An FST opened for [fn]; raises as [parse] does, and [Invalid_argument] for a VCD. *)
-let with_fst ~fn path f =
+(* A private handle on an FST for [fn]; [Invalid_argument] for a VCD. *)
+let private_file ~fn path =
   if detect_file path = `Vcd then invalid_arg (fn ^ ": not an FST file");
-  let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" path (Fst.Error.to_string e)) in
-  match Fst.open_file path with
-  | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
-  | Error e -> raise (error e)
-  | Ok t ->
-      let error e =
-        Fst.close t;
-        error e
-      in
-      f t error
+  File.make ~name:path (Fst.open_file path)
 
 let blocks path =
-  with_fst ~fn:"Vcd_fst.blocks" path (fun t error ->
-      match Fst.blocks t with
-      | Error e -> raise (error e)
-      | Ok bs ->
-          Fst.close t;
-          Array.map
-            (fun (b : Fst.block) ->
-              (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
-            bs)
+  let t = private_file ~fn:"Vcd_fst.blocks" path in
+  let r = File.blocks t in
+  File.close t;
+  match r with Ok bs -> bs | Error m -> raise (Vcd.Parse_error m)
 
 let open_at ?select path ~time =
-  with_fst ~fn:"Vcd_fst.open_at" path (fun t error ->
-      match definitions t with
-      | Error e -> raise (error e)
-      | Ok (header, ids, ports) ->
-          let time = Vcd_types.Timestamp.to_int64 time in
-          let block =
-            match Fst.blocks t with
-            | Error e -> raise (error e)
-            | Ok [||] -> 0
-            | Ok bs -> (
-                let k = ref 0 in
-                Array.iteri (fun i (b : Fst.block) -> if Int64.compare b.start_time time <= 0 then k := i) bs;
-                match Fst.aligned_block t !k with Ok j -> j | Error e -> raise (error e))
-          in
-          let state, simulation = events ?select ~block t ~error ~ids ~ports in
-          (state, { Vcd.header; simulation }))
+  let t = private_file ~fn:"Vcd_fst.open_at" path in
+  let state, r = start ?select ~at:time t in
+  (state, { r with simulation = owning t r.simulation })
