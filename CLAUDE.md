@@ -31,6 +31,8 @@ Two-phase parsing: the **header** is parsed eagerly by Menhir and produces `Vcd_
 
 FST input is `lib/fst/vcd_fst.ml` (library `ovcd.fst`, on [ocaml-fst](https://github.com/TheCBaH/ocaml-fst)): it builds the same `Vcd.parse_result` from an FST, decoding one FST block per pull, and must match parsing `fst2vcd -e` output (`test/fst.t`, `test/fst_equal.ml`). `Vcd_fst.open_file` picks VCD or FST by content. `simulation` is a `Seq.once`: a second traversal raises `Seq.Forced_twice`. It reads through `Fst.Vcd.reader`: ovcd maps the sink calls to events (a total byte map for scalars) and builds the header from the reader's first step. `Vcd_fst.File` is a handle that caches the header: its `stream` borrows it, and a new `stream` or `close` invalidates earlier streams; `parse_file`, `open_file` and `open_at` own a private handle and close it at the end of the sequence or when a pull raises. A caller that may stop early uses `Vcd.with_file` / `Vcd_fst.with_file`, as the tools do.
 
+Errors are typed (`lib/vcd_error.ml`, exported as `Vcd.Error`): the lexer and grammar raise the internal `Vcd_error.Located` with a position, `Vcd` turns it into `Vcd.Error.E`, and every entry point raises `E` or has a `*_result` variant; `Failure`, `Sys_error` and `Invalid_argument` must not escape (`Vcd_util.parse_range` is the one `Failure` left, a CLI argument parser). The tools print errors with `Vcd_util.error_message`.
+
 The public API is `lib/vcd.ml` / `lib/vcd.mli` and `lib/fst/vcd_fst.mli`. Everything else in `lib/` is internal.
 
 ## Tests
