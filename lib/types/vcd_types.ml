@@ -124,7 +124,7 @@ module Value = struct
         List.iter (fun l -> Buffer.add_char buf (char_of_logic l)) ls;
         Buffer.contents buf
     | Other s -> "b" ^ s
-    | Real f -> string_of_float f
+    | Real f -> Printf.sprintf "%.17g" f
     | Port s -> "p" ^ s
     | String s -> "s" ^ s
 
@@ -141,7 +141,7 @@ module Value = struct
         Bytes.iter (fun c -> Buffer.add_string buf (Printf.sprintf "%02x" (Char.code c))) b;
         Buffer.contents buf
     | (Scalars _ | Other _ | Port _ | String _) as v -> to_string v
-    | Real f -> string_of_float f
+    | Real f -> Printf.sprintf "%.17g" f
 
   let zero = Int 0
   let one = Int 1

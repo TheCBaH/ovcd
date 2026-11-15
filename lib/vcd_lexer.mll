@@ -7,41 +7,7 @@
     "$scope",            KW_SCOPE;
     "$upscope",          KW_UPSCOPE;
     "$var",              KW_VAR;
-    "$timescale",        KW_TIMESCALE;
     "$timezero",         KW_TIMEZERO;
-    "$date",             KW_DATE;
-    "$version",          KW_VERSION;
-    "$comment",          KW_COMMENT;
-    "$dumpvars",         KW_DUMPVARS;
-    "$dumpall",          KW_DUMPALL;
-    "$dumpon",           KW_DUMPON;
-    "$dumpoff",          KW_DUMPOFF;
-    "$dumpports",        KW_DUMPPORTS;
-    "module",    SCP_MODULE;
-    "task",      SCP_TASK;
-    "function",  SCP_FUNCTION;
-    "begin",     SCP_BEGIN;
-    "fork",      SCP_FORK;
-    "event",     VT_EVENT;
-    "integer",   VT_INTEGER;
-    "parameter", VT_PARAMETER;
-    "real",      VT_REAL;
-    "realtime",  VT_REALTIME;
-    "reg",       VT_REG;
-    "supply0",   VT_SUPPLY0;
-    "supply1",   VT_SUPPLY1;
-    "time",      VT_TIME;
-    "tri",       VT_TRI;
-    "triand",    VT_TRIAND;
-    "trior",     VT_TRIOR;
-    "trireg",    VT_TRIREG;
-    "tri0",      VT_TRI0;
-    "tri1",      VT_TRI1;
-    "wand",      VT_WAND;
-    "wire",      VT_WIRE;
-    "wor",       VT_WOR;
-    "logic",     VT_LOGIC;    (* SystemVerilog / VHDL *)
-    "string",    VT_STRING;   (* SystemVerilog / VHDL *)
   ]
 
   let keyword_tbl =
@@ -53,19 +19,6 @@
     match Hashtbl.find_opt keyword_tbl s with
     | Some tok -> tok
     | None     -> ID s
-
-  (* Extract the integer value (0 or 1) of an ASCII binary digit.
-     '0' = 0x30, '1' = 0x31 — the low bit is the digit value. *)
-  let bit c = Char.code c land 1
-
-  let nibble c1 c2 c3 c4 =
-    bit c1 lsl 3 lor bit c2 lsl 2 lor bit c3 lsl 1 lor bit c4
-
-  let byte c1 c2 c3 c4 c5 c6 c7 c8 =
-    nibble c1 c2 c3 c4 lsl 4 lor nibble c5 c6 c7 c8
-
-  let int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 =
-    byte c1 c2 c3 c4 c5 c6 c7 c8 lsl 8 lor byte c9 c10 c11 c12 c13 c14 c15 c16
 
   let mkid = Vcd_types.ID.of_string
 
@@ -99,6 +52,10 @@ let word    = idchar+
 rule token = parse
   | '\n'    { Lexing.new_line lexbuf; token lexbuf }
   | blank+  { token lexbuf }
+  | "$timescale" { TIMESCALE (collect_text (Buffer.create 16) lexbuf) }
+  | "$date"      { DATE (collect_text (Buffer.create 16) lexbuf) }
+  | "$version"   { VERSION (collect_text (Buffer.create 16) lexbuf) }
+  | "$comment"   { COMMENT (collect_text (Buffer.create 16) lexbuf) }
   | word    { lookup_or_id (Lexing.lexeme lexbuf) }
   | eof     { Vcd_parser.EOF }
   | _       { token lexbuf }
@@ -132,80 +89,10 @@ and next_selected keep = parse
   | (scalarchar as v) (idchar+ as id)
       { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_ast.scalar_of_char v)) }
 
-  (* All-0/1 vector fast paths — no String.length, no branch, no loop.
-     Specific-length rules must precede the general rule so they win the
-     longest-match tie for their exact lengths. *)
-
-  (* 1 bit: b0 and b1 in one rule *)
-  | bin_pfx (digit_01 as c) white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (bit c))) }
-
-  (* 2 bits *)
-  | bin_pfx (digit_01 as c1) (digit_01 as c2)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            bit c1 lsl 1 lor bit c2))) }
-
-  (* 3 bits *)
-  | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            bit c1 lsl 2 lor bit c2 lsl 1 lor bit c3))) }
-
-  (* 4 bits *)
-  | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3) (digit_01 as c4)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (nibble c1 c2 c3 c4))) }
-
-  (* 8 bits *)
-  | bin_pfx (digit_01 as c1) (digit_01 as c2) (digit_01 as c3) (digit_01 as c4)
-            (digit_01 as c5) (digit_01 as c6) (digit_01 as c7) (digit_01 as c8)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (byte c1 c2 c3 c4 c5 c6 c7 c8))) }
-
-  (* 16 bits → Int (2^16−1 = 65535, fits in any OCaml int) *)
-  | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
-            (digit_01 as c5)  (digit_01 as c6)  (digit_01 as c7)  (digit_01 as c8)
-            (digit_01 as c9)  (digit_01 as c10) (digit_01 as c11) (digit_01 as c12)
-            (digit_01 as c13) (digit_01 as c14) (digit_01 as c15) (digit_01 as c16)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16))) }
-
-  (* 24 bits → Int (2^24−1 = 16 777 215, still fits in the 31-bit minimum OCaml int) *)
-  | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
-            (digit_01 as c5)  (digit_01 as c6)  (digit_01 as c7)  (digit_01 as c8)
-            (digit_01 as c9)  (digit_01 as c10) (digit_01 as c11) (digit_01 as c12)
-            (digit_01 as c13) (digit_01 as c14) (digit_01 as c15) (digit_01 as c16)
-            (digit_01 as c17) (digit_01 as c18) (digit_01 as c19) (digit_01 as c20)
-            (digit_01 as c21) (digit_01 as c22) (digit_01 as c23) (digit_01 as c24)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int (
-            int16 c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 lsl 8 lor
-            byte c17 c18 c19 c20 c21 c22 c23 c24))) }
-
-  (* 32 bits → Bytes (4 bytes, MSB first; 2^32−1 exceeds the 31-bit minimum OCaml int) *)
-  | bin_pfx (digit_01 as c1)  (digit_01 as c2)  (digit_01 as c3)  (digit_01 as c4)
-            (digit_01 as c5)  (digit_01 as c6)  (digit_01 as c7)  (digit_01 as c8)
-            (digit_01 as c9)  (digit_01 as c10) (digit_01 as c11) (digit_01 as c12)
-            (digit_01 as c13) (digit_01 as c14) (digit_01 as c15) (digit_01 as c16)
-            (digit_01 as c17) (digit_01 as c18) (digit_01 as c19) (digit_01 as c20)
-            (digit_01 as c21) (digit_01 as c22) (digit_01 as c23) (digit_01 as c24)
-            (digit_01 as c25) (digit_01 as c26) (digit_01 as c27) (digit_01 as c28)
-            (digit_01 as c29) (digit_01 as c30) (digit_01 as c31) (digit_01 as c32)
-            white+ (word as id)
-      { if not (keep id) then next_selected keep lexbuf else let hi = int16 c1  c2  c3  c4  c5  c6  c7  c8
-                         c9  c10 c11 c12 c13 c14 c15 c16 in
-        let lo = int16 c17 c18 c19 c20 c21 c22 c23 c24
-                       c25 c26 c27 c28 c29 c30 c31 c32 in
-        let v = Int64.logor (Int64.shift_left (Int64.of_int hi) 16)
-                            (Int64.of_int lo) in
-        Some (Vcd_ast.Change (mkid id, Vcd_types.Value.int64 v)) }
-
-  (* General all-0/1 path — lengths not covered above (5,6,7,9–15,17–23,25–31,33+).
+  (* All-0/1 vectors of any width.
      String.length is unavoidable here; ocamllex cannot count in a pattern.
      <= 24 → Int, 25..64 → Int64, > 64 → Bytes. *)
-  | bin_pfx (digit_01 digit_01+ as bits) white+ (word as id)
+  | bin_pfx (digit_01+ as bits) white+ (word as id)
       { if not (keep id) then next_selected keep lexbuf else Some (Vcd_ast.Change (mkid id, Vcd_ast.binary_value bits)) }
 
   (* 4-state / 9-state slow path (x, z, u, …). *)

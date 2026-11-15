@@ -46,7 +46,7 @@ type open_scope = {
 let close_scope o = { s_type = o.st; s_name = o.name; vars = List.rev o.o_vars; children = List.rev o.o_children }
 
 (* Builds the header from the definitions the reader's first step passes. *)
-let collector () =
+let collector () : (Fst.Vcd.definition -> unit) * (unit -> header) =
   let stack = ref [] and top = ref [] and comment = ref None in
   let date = ref None and version = ref None and timescale = ref None and timezero = ref None in
   let add_scope s = match !stack with o :: _ -> o.o_children <- s :: o.o_children | [] -> top := s :: !top in

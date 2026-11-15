@@ -41,7 +41,13 @@ let jsont =
   |> Jsont.Object.opt_mem "index" Jsont.string ~enc:(fun s -> s.index)
   |> Jsont.Object.finish
 
+let check_utf_8 s =
+  let bad = List.exists (fun x -> not (String.is_valid_utf_8 x)) in
+  if bad ((s.path :: s.id :: s.var_type :: s.parts) @ s.scope_types @ Option.to_list s.index) then
+    raise (Vcd.Error.E (`Encoding (Printf.sprintf "signal %S: name is not valid UTF-8" s.path)))
+
 let to_line s =
+  check_utf_8 s;
   match Jsont_bytesrw.encode_string ~format:Jsont.Minify jsont s with Ok l -> l | Error e -> invalid_arg e
 
 let of_line l = Jsont_bytesrw.decode_string jsont l

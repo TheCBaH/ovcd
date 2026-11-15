@@ -28,6 +28,14 @@ errors), raised from the entry points and from pulling the simulation.
 `Vcd.parse_string_result`, `Vcd_fst.open_file_result` and the like return the
 errors raised before the simulation starts; `Vcd.Error.pp_error` prints one.
 
+Reals print with 17 significant digits (`%.17g`), so every bit of a double survives
+`float_of_string`; `0.` is now `0` and `3.14` is `3.1400000000000001`.
+
+JSON Lines signal listings (`--list-signals --format jsonl`, `Vcd_signals.to_line`) carry
+names exactly, so a name that is not valid UTF-8 is an error (`` `Encoding ``, naming the
+signal) instead of an invalid line; valid UTF-8 round-trips unchanged and the schema is
+the same.
+
 Two command-line tools are included — `vcd_dump` (structural: hierarchy, signal
 listings, raw value stream) and `vcd_tool` (stateful: per-step state and
 relational `--when`/`--show` queries). See the [CLI guide](doc/cli-guide.md) for

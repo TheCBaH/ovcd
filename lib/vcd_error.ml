@@ -7,7 +7,8 @@ type error =
   | `Io of string
   | `Not_fst of string
   | `Closed of string
-  | `Superseded of string ]
+  | `Superseded of string
+  | `Encoding of string ]
 
 exception E of error
 exception Located of pos * string
@@ -28,6 +29,7 @@ let pp_error ppf : error -> unit = function
   | `Not_fst path -> Format.fprintf ppf "%s: not an FST file" path
   | `Closed name -> Format.fprintf ppf "%s: handle closed" name
   | `Superseded name -> Format.fprintf ppf "%s: stream superseded" name
+  | `Encoding m -> Format.pp_print_string ppf m
 
 let to_string e = Format.asprintf "%a" pp_error e
 let catch f = try Ok (f ()) with E e -> Error e
