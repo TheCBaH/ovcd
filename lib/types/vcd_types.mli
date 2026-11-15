@@ -26,7 +26,9 @@ module Reference : sig
   val push : string -> t -> t
   val equal : t -> t -> bool
   val compare : t -> t -> int
+
   val make : string list -> string -> t
+  (** [make scopes name] is [of_list (scopes @ [name])]: the name is the innermost component. *)
 
   val to_list : t -> string list
   (** Returns components in outermost-to-innermost (display) order. *)

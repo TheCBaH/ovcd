@@ -26,9 +26,9 @@ module Reference = struct
   let push name t = name :: t
   let equal a b = List.equal String.equal a b
   let compare a b = List.compare String.compare a b
-  let make scopes name = List.fold_left (fun acc s -> push s acc) (push name empty) scopes
   let to_list v = List.rev v
   let of_list comps = List.fold_left (fun acc s -> push s acc) empty comps
+  let make scopes name = of_list (scopes @ [ name ])
   let to_string v = String.concat "." (List.rev v)
   let of_string s = List.fold_left (fun acc s -> push s acc) empty (String.split_on_char '.' s)
 end
