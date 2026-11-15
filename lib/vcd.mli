@@ -97,7 +97,17 @@ module Resolver : sig
   (** Convenience: return all [Reference.t] values for an ID; empty set if the ID is unknown. *)
 
   val find_id : t -> Vcd_types.Reference.t -> Vcd_types.ID.t option
-  (** Reverse lookup: find the [ID.t] for a given [Reference.t]. *)
+  (** Reverse lookup: find the [ID.t] for a given [Reference.t]. A path declared with several IDs (bit-blasted [d [0]],
+      [d [1]], or [data [7:4]] and [data [3:0]]) gives the most recently declared one; use {!find_ids} to see them all.
+  *)
+
+  val find_ids : t -> Vcd_types.Reference.t -> Vcd_types.ID.t list
+  (** Every ID declared at the path, in declaration order, each once; empty when none. A repeated ID counts as declared
+      at its last declaration. *)
+
+  val display_name : t -> Vcd_types.ID.t -> Vcd_types.Reference.t -> string
+  (** [display_name t id ref] is [Reference.to_string ref], followed by the declared index (for example
+      ["top.data[7:4]"]) when [ref] is ambiguous, that is shared by more than one ID, and the declaration wrote one. *)
 
   val fold : (entry -> 'a -> 'a) -> t -> 'a -> 'a
   (** Fold over all entries in ID order ([ID.compare]), once per distinct ID. *)

@@ -187,6 +187,13 @@ module Resolver = struct
     let hash = Hashtbl.hash
   end)
 
+  module Index_tbl = Hashtbl.Make (struct
+    type t = Vcd_types.ID.t * Vcd_types.Reference.t
+
+    let equal (i, r) (j, s) = Vcd_types.ID.equal i j && Vcd_types.Reference.equal r s
+    let hash (i, r) = Hashtbl.hash (Vcd_types.ID.to_string i, Hashtbl.hash r)
+  end)
+
   type ordered = {
     by_ref : Vcd_types.ID.t Ref_map.t;  (** Reversed reference order: leaf first. *)
     by_ref_fwd : Vcd_types.ID.t Ref_fwd_map.t;  (** Forward reference order: scope first. *)
@@ -194,7 +201,8 @@ module Resolver = struct
 
   type t = {
     by_id : entry ID_map.t;
-    ids_of_ref : Vcd_types.ID.t Ref_tbl.t;
+    ids_of_ref : Vcd_types.ID.t list Ref_tbl.t;  (** Most recently declared first. *)
+    indexes : string Index_tbl.t;  (** Declared bit-select of an (ID, path) pair, when written. *)
     ordered : ordered Lazy.t;  (** Built on the first prefix/suffix query. *)
   }
 
@@ -204,12 +212,15 @@ module Resolver = struct
     (* Sized to the header: growing the table was most of the cost of [make]. *)
     let rec count (s : scope_node) = List.fold_left (fun n c -> n + count c) (List.length s.vars) s.children in
     let ids_of_ref = Ref_tbl.create (List.fold_left (fun n s -> n + count s) 16 header.scopes) in
+    let indexes = Index_tbl.create 16 in
     let rec collect path vars children by_id =
       let by_id =
         List.fold_left
           (fun by_id var ->
             let r = push var.ref path in
-            Ref_tbl.replace ids_of_ref r var.id;
+            let prior = Option.value (Ref_tbl.find_opt ids_of_ref r) ~default:[] in
+            Ref_tbl.replace ids_of_ref r (var.id :: List.filter (fun i -> not (Vcd_types.ID.equal i var.id)) prior);
+            Option.iter (Index_tbl.replace indexes (var.id, r)) var.index;
             ID_map.update var.id
               (function None -> Some (entry var.id var.size [ r ]) | Some e -> Some (entry e.id e.size (r :: e.refs)))
               by_id)
@@ -226,11 +237,12 @@ module Resolver = struct
       lazy
         (Ref_tbl.fold
            (fun r id { by_ref; by_ref_fwd } ->
+             let id = List.hd id in
              { by_ref = Ref_map.add r id by_ref; by_ref_fwd = Ref_fwd_map.add (to_list r) id by_ref_fwd })
            ids_of_ref
            { by_ref = Ref_map.empty; by_ref_fwd = Ref_fwd_map.empty })
     in
-    { by_id; ids_of_ref; ordered }
+    { by_id; ids_of_ref; indexes; ordered }
 
   let entry_id e = e.id
   let entry_size e = e.size
@@ -240,7 +252,15 @@ module Resolver = struct
   let references t id =
     match ID_map.find_opt id t.by_id with None -> Ref_set.empty | Some e -> Lazy.force e.references
 
-  let find_id t ref = Ref_tbl.find_opt t.ids_of_ref ref
+  let find_id t ref = match Ref_tbl.find_opt t.ids_of_ref ref with Some (id :: _) -> Some id | _ -> None
+  let find_ids t ref = match Ref_tbl.find_opt t.ids_of_ref ref with Some ids -> List.rev ids | None -> []
+
+  let display_name t id ref =
+    let name = Vcd_types.Reference.to_string ref in
+    match (Ref_tbl.find_opt t.ids_of_ref ref, Index_tbl.find_opt t.indexes (id, ref)) with
+    | Some (_ :: _ :: _), Some index -> name ^ index
+    | _ -> name
+
   let fold f t acc = ID_map.fold (fun _ e a -> f e a) t.by_id acc
 
   let list_starts_with prefix lst =
