@@ -17,7 +17,7 @@ let pp_changes resolver strip_map filter ev =
           Vcd.Ref_set.iter
             (fun r ->
               let display = match strip_map with None -> r | Some f -> f r in
-              Format.printf "  %s=%s\n" (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))
+              Tool_out.assignment "  " (Vcd_types.Reference.to_string display) (Vcd_types.Value.to_string_hex size v))
             (Vcd_util.selected_refs resolver filter id))
     ev.Stateful.changes
 
@@ -62,9 +62,7 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       show_ids []
     |> List.sort_uniq compare
   in
-  let print_show indent state =
-    List.iter (fun (path, v) -> Format.printf "%s%s=%s\n" indent path v) (show_lines state)
-  in
+  let print_show indent state = List.iter (fun (path, v) -> Tool_out.assignment indent path v) (show_lines state) in
   (* Newest-first ring of the last (lookback + 1) snapshots. *)
   let recent = ref [] in
   let rec take n = function [] -> [] | _ when n = 0 -> [] | x :: xs -> x :: take (n - 1) xs in
@@ -89,7 +87,7 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
           triggers
       in
       if fired <> [] then begin
-        List.iter (fun (path, v) -> Format.printf "@%a %s=%s\n" Vcd_types.Timestamp.pp ev.Stateful.time path v) fired;
+        List.iter (fun (path, v) -> Tool_out.assignment ("@" ^ Tool_out.ts ev.Stateful.time ^ " ") path v) fired;
         match !recent with
         | [] -> ()
         | (_, state) :: older ->
@@ -98,7 +96,7 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
             print_show "    " state;
             List.iteri
               (fun i (t, state) ->
-                Format.printf "  -%d @%a\n" (i + 1) Vcd_types.Timestamp.pp t;
+                Tool_out.text (Printf.sprintf "  -%d @%s" (i + 1) (Tool_out.ts t));
                 print_show "    " state)
               older
       end)
@@ -112,9 +110,11 @@ let with_parsed ?select path f =
   match Vcd_fst.with_file ?select path f with
   | v -> v
   | exception Vcd.Error.E e ->
+      Tool_out.flush ();
       Printf.eprintf "%s\n" (Vcd_util.error_message e);
       exit 1
   | exception Failure msg ->
+      Tool_out.flush ();
       Printf.eprintf "error: %s\n" msg;
       exit 1
 
@@ -245,7 +245,7 @@ let main () =
         in
         Seq.iter
           (fun ev ->
-            Format.printf "#%a\n" Vcd_types.Timestamp.pp ev.Stateful.time;
+            Tool_out.text ("#" ^ Tool_out.ts ev.Stateful.time);
             pp_changes resolver strip_map filter ev)
           events
       end)
@@ -255,5 +255,6 @@ let main () =
 let () =
   try main ()
   with Vcd.Error.E e ->
+    Tool_out.flush ();
     Printf.eprintf "%s\n" (Vcd_util.error_message e);
     exit 1

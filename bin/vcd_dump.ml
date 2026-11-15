@@ -33,9 +33,11 @@ let with_parsed ?select path f =
   match Vcd_fst.with_file ?select path f with
   | v -> v
   | exception Vcd.Error.E e ->
+      Tool_out.flush ();
       Printf.eprintf "%s\n" (Vcd_util.error_message e);
       exit 1
   | exception Failure msg ->
+      Tool_out.flush ();
       Printf.eprintf "error: %s\n" msg;
       exit 1
 
@@ -194,7 +196,7 @@ let main () =
             match !pending_ts with
             | None -> ()
             | Some t ->
-                Format.printf "#%a\n" Vcd_types.Timestamp.pp t;
+                Tool_out.text ("#" ^ Tool_out.ts t);
                 pending_ts := None
           in
           try
@@ -208,17 +210,18 @@ let main () =
                 | Change (id, v) when !cur_in_range && show_id filter id ->
                     flush ();
                     let names, size = resolve id in
-                    List.iter (fun name -> Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)) names
+                    let hex = Vcd_types.Value.to_string_hex size v in
+                    List.iter (fun name -> Tool_out.assignment "  " name hex) names
                 | Change _ -> ()
                 | DumpStart k when !cur_in_range ->
                     flush ();
-                    Format.printf "$%s\n" k
+                    Tool_out.text ("$" ^ k)
                 | DumpStart _ -> ()
-                | DumpEnd when !cur_in_range -> Format.printf "$end\n"
+                | DumpEnd when !cur_in_range -> Tool_out.text "$end"
                 | DumpEnd -> ()
                 | SimComment c when !cur_in_range ->
                     flush ();
-                    Format.printf "//%s\n" c
+                    Tool_out.text ("//" ^ c)
                 | SimComment _ -> ())
               result.simulation
           with Exit -> ()
@@ -261,5 +264,6 @@ let main () =
 let () =
   try main ()
   with Vcd.Error.E e ->
+    Tool_out.flush ();
     Printf.eprintf "%s\n" (Vcd_util.error_message e);
     exit 1
