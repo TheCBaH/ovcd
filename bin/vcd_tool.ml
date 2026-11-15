@@ -104,8 +104,8 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       end)
     events
 
-let with_parsed path f =
-  match Vcd_fst.with_file path f with
+let with_parsed ?select path f =
+  match Vcd_fst.with_file ?select path f with
   | v -> v
   | exception Vcd.Parse_error msg ->
       Printf.eprintf "parse error: %s\n" msg;
@@ -203,9 +203,16 @@ let main () =
   if files = [] then (
     Arg.usage spec usage;
     exit 1);
+  (* The IDs to read are known only once the header is parsed; the first pull of the simulation asks. *)
+  let wanted = ref None in
+  let select =
+    if when_specs <> [] || patterns <> [] || regexes <> [] then
+      Some (fun id -> match !wanted with None -> true | Some s -> Vcd.ID_set.mem id s)
+    else None
+  in
   List.iter
     (fun path ->
-      with_parsed path @@ fun result ->
+      with_parsed ?select path @@ fun result ->
       let resolver = Vcd.Resolver.make result.header in
       if when_specs <> [] then begin
         let show_filter = Vcd_util.build_filter ~pattern_label:"--show" resolver show_patterns [] in
@@ -220,12 +227,14 @@ let main () =
         in
         let show_ids = match show_filter with Some f -> Vcd_util.filter_ids f | None -> Vcd.ID_set.empty in
         let tracked = Vcd.ID_set.union trigger_ids show_ids in
+        wanted := Some tracked;
         let events = Stateful.stream ~tracked ~ranges result.simulation in
         correlate resolver strip_map ~when_specs ~show_filter ~lookback events
       end
       else begin
         let filter = Vcd_util.build_filter resolver patterns regexes in
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
+        wanted := Option.map Vcd_util.filter_ids filter;
         let events =
           match filter with
           | None -> Stateful.stream ~ranges result.simulation

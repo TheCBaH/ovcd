@@ -25,8 +25,8 @@ let parse_pattern_or_exit r s =
       exit 1
   | Ok pat -> r := (s, pat) :: !r
 
-let with_parsed path f =
-  match Vcd_fst.with_file path f with
+let with_parsed ?select path f =
+  match Vcd_fst.with_file ?select path f with
   | v -> v
   | exception Vcd.Parse_error msg ->
       Printf.eprintf "parse error: %s\n" msg;
@@ -109,6 +109,11 @@ let main () =
   if files = [] then (
     Arg.usage spec usage;
     exit 1);
+  (* The filter exists only once the header is parsed; the first pull of the simulation reads it. *)
+  let filter_ref = ref None in
+  let select =
+    if !resolve && (patterns <> [] || regexes <> []) then Some (fun id -> Vcd_util.mem_filter !filter_ref id) else None
+  in
   List.iter
     (fun path ->
       if list_signals <> [] then begin
@@ -146,21 +151,24 @@ let main () =
       end
       else if !bench_runs > 0 then begin
         for _ = 1 to !bench_runs do
-          with_parsed path @@ fun r ->
+          with_parsed ?select path @@ fun r ->
           if !resolve then begin
             let resolver = Vcd.Resolver.make r.header in
             let filter = Vcd_util.build_filter resolver patterns regexes in
+            filter_ref := filter;
+            filter_ref := filter;
             Seq.iter (function Change (id, _) when show_id filter id -> () | _ -> ()) r.simulation
           end
           else Seq.iter ignore r.simulation
         done
       end
       else begin
-        with_parsed path @@ fun result ->
+        with_parsed ?select path @@ fun result ->
         let h = result.header in
         if !resolve then begin
           let resolver = Vcd.Resolver.make h in
           let filter = Vcd_util.build_filter resolver patterns regexes in
+          filter_ref := filter;
           let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
           let resolve id =
             match Vcd.Resolver.find resolver id with
