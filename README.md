@@ -16,7 +16,9 @@ FST files are read natively too, through
 header and lazy event stream as `fst2vcd -e` followed by `Vcd.parse_file`,
 decoding one FST block at a time. The event stream can be traversed once;
 `Vcd.with_file` and `Vcd_fst.with_file` close the file on return or
-exception. Both tools accept either format. ovcd is stricter than GTKWave on damaged
+exception. A viewer that seeks repeatedly opens a `Vcd_fst.File` once: its streams
+share the header and the FST library's caches, borrow the handle, and are
+invalidated by the next stream or by `close`. Both tools accept either format. ovcd is stricter than GTKWave on damaged
 FST files: damaged chain tables and invalid time-table trailers are errors
 here, where GTKWave skips the block.
 

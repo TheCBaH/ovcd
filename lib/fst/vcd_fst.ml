@@ -42,11 +42,6 @@ type open_scope = {
 
 let close_scope o = { s_type = o.st; s_name = o.name; vars = List.rev o.o_vars; children = List.rev o.o_children }
 
-let ids_of t =
-  match Fst.signals t with
-  | Ok sigs -> Ok (Array.init (Array.length sigs) (fun i -> Vcd_types.ID.of_string (Fst.Vcd.id (i + 1))))
-  | Error _ as e -> e
-
 (* Builds the header from the definitions the reader's first step passes. *)
 let collector () =
   let stack = ref [] and top = ref [] and comment = ref None in
@@ -95,7 +90,7 @@ let collector () =
   in
   (definition, header)
 
-let events ?select ?(block = 0) t ~error ~ids ~definition =
+let events ?select ?(block = 0) t ~error ~live ~ids ~definition =
   let resume = block > 0 in
   let q = Queue.create () in
   let push e = Queue.push e q in
@@ -138,41 +133,153 @@ let events ?select ?(block = 0) t ~error ~ids ~definition =
   | Error e -> raise (error e)
   | Ok r ->
       let rec next () =
+        live ();
         match Queue.take_opt q with
         | Some e -> Seq.Cons (e, next)
-        | None -> (
-            match Fst.Vcd.step r with
-            | Ok true -> next ()
-            | Ok false ->
-                Fst.close t;
-                Seq.Nil
-            | Error e -> raise (error e))
+        | None -> ( match Fst.Vcd.step r with Ok true -> next () | Ok false -> Seq.Nil | Error e -> raise (error e))
       in
       (* The first step passes the definitions. A resumed stream's state is complete once the first block's frame
          and its first [time] have been delivered, so the second step is taken now. *)
-      let step () = match Fst.Vcd.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e) in
+      let step () = match Fst.Vcd.step r with Ok _ -> () | Error e -> raise (error e) in
       step ();
       if resume then step ();
       (!state, Seq.once next)
 
-let parse_t ?select ~name opened =
-  let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)) in
-  match opened with
-  | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
-  | Error e -> raise (error e)
-  | Ok t -> (
-      let error e =
-        Fst.close t;
-        error e
-      in
-      match ids_of t with
-      | Error e -> raise (error e)
-      | Ok ids ->
-          let definition, header = collector () in
-          let _, simulation = events ?select t ~error ~ids ~definition in
-          (t, { Vcd.header = header (); simulation }))
+module File = struct
+  type t = {
+    name : string;
+    fst : Fst.t;
+    mutable ids : Vcd_types.ID.t array option;
+    mutable header : Vcd_ast.header option;
+    mutable builds : int;
+    mutable epoch : int;
+    mutable closed : bool;
+  }
 
-let parse ?select ~name opened = snd (parse_t ?select ~name opened)
+  let error t e = Vcd.Parse_error (Printf.sprintf "%s: %s" t.name (Fst.Error.to_string e))
+
+  let make ~name = function
+    | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
+    | Error e -> raise (Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)))
+    | Ok fst -> { name; fst; ids = None; header = None; builds = 0; epoch = 0; closed = false }
+
+  let close t =
+    t.closed <- true;
+    t.epoch <- t.epoch + 1;
+    Fst.close t.fst
+
+  let open_ path =
+    match
+      if detect_file path = `Vcd then invalid_arg "Vcd_fst.File.open_: not an FST file";
+      make ~name:path (Fst.open_file path)
+    with
+    | t -> Ok t
+    | exception (Sys_error m | Vcd.Parse_error m) -> Error m
+
+  let ids t =
+    match t.ids with
+    | Some ids -> ids
+    | None -> (
+        match Fst.signals t.fst with
+        | Error e -> raise (error t e)
+        | Ok sigs ->
+            let ids = Array.init (Array.length sigs) (fun i -> Vcd_types.ID.of_string (Fst.Vcd.id (i + 1))) in
+            t.ids <- Some ids;
+            ids)
+
+  let live t epoch () =
+    if t.closed then raise (Vcd.Parse_error (t.name ^ ": handle closed"))
+    else if t.epoch <> epoch then raise (Vcd.Parse_error (t.name ^ ": stream superseded"))
+
+  let header t =
+    match t.header with
+    | Some h -> h
+    | None -> (
+        live t t.epoch ();
+        let definition, header = collector () in
+        match Fst.Vcd.reader ~extensions:true t.fst { Fst.Vcd.ignore_sink with definition } with
+        | Error e -> raise (error t e)
+        | Ok r -> (
+            match Fst.Vcd.step r with
+            | Error e -> raise (error t e)
+            | Ok _ ->
+                let h = header () in
+                t.builds <- t.builds + 1;
+                t.header <- Some h;
+                h))
+
+  let block_at t time =
+    let time = Vcd_types.Timestamp.to_int64 time in
+    match Fst.blocks t.fst with
+    | Error e -> raise (error t e)
+    | Ok [||] -> 0
+    | Ok bs -> (
+        let k = ref 0 in
+        Array.iteri (fun i (b : Fst.block) -> if Int64.compare b.start_time time <= 0 then k := i) bs;
+        match Fst.aligned_block t.fst !k with Ok j -> j | Error e -> raise (error t e))
+
+  let stream ?select ?at t =
+    live t t.epoch ();
+    let ids = ids t in
+    let block = match at with None -> 0 | Some time -> block_at t time in
+    t.epoch <- t.epoch + 1;
+    let definition, header = if t.header = None then collector () else (ignore, fun () -> assert false) in
+    let state, seq = events ?select ~block t.fst ~error:(error t) ~live:(live t t.epoch) ~ids ~definition in
+    if t.header = None then begin
+      t.header <- Some (header ());
+      t.builds <- t.builds + 1
+    end;
+    (state, seq)
+
+  let blocks t =
+    match live t t.epoch () with
+    | exception Vcd.Parse_error m -> Error m
+    | () -> (
+        match Fst.blocks t.fst with
+        | Error e -> Error (Printf.sprintf "%s: %s" t.name (Fst.Error.to_string e))
+        | Ok bs ->
+            Ok
+              (Array.map
+                 (fun (b : Fst.block) ->
+                   (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
+                 bs))
+
+  let header_builds t = t.builds
+end
+
+(* A stream over a private handle, which it closes at its end and when a pull raises. *)
+let owning t seq =
+  let rec wrap s () =
+    match s () with
+    | Seq.Cons (e, k) -> Seq.Cons (e, wrap k)
+    | Seq.Nil ->
+        File.close t;
+        Seq.Nil
+    | exception ex ->
+        File.close t;
+        raise ex
+  in
+  Seq.once (wrap seq)
+
+(* A stream over a handle, closing it if starting raises. *)
+let start ?select ?at t =
+  match
+    let state, simulation = File.stream ?select ?at t in
+    (state, { Vcd.header = File.header t; simulation })
+  with
+  | v -> v
+  | exception ex ->
+      File.close t;
+      raise ex
+
+let parse_t ?select ~name opened =
+  let t = File.make ~name opened in
+  (t, snd (start ?select t))
+
+let parse ?select ~name opened =
+  let t, r = parse_t ?select ~name opened in
+  { r with simulation = owning t r.simulation }
+
 let parse_string ?select s = parse ?select ~name:"<string>" (Fst.of_string s)
 let parse_file ?select path = parse ?select ~name:path (Fst.open_file path)
 
@@ -187,48 +294,20 @@ let with_file ?select path f =
   | `Vcd -> Vcd.with_file ?select path f
   | `Fst ->
       let t, r = parse_t ?select ~name:path (Fst.open_file path) in
-      Fun.protect ~finally:(fun () -> Fst.close t) (fun () -> f r)
+      Fun.protect ~finally:(fun () -> File.close t) (fun () -> f r)
 
-(* An FST opened for [fn]; raises as [parse] does, and [Invalid_argument] for a VCD. *)
-let with_fst ~fn path f =
+(* A private handle on an FST for [fn]; [Invalid_argument] for a VCD. *)
+let private_file ~fn path =
   if detect_file path = `Vcd then invalid_arg (fn ^ ": not an FST file");
-  let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" path (Fst.Error.to_string e)) in
-  match Fst.open_file path with
-  | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
-  | Error e -> raise (error e)
-  | Ok t ->
-      let error e =
-        Fst.close t;
-        error e
-      in
-      f t error
+  File.make ~name:path (Fst.open_file path)
 
 let blocks path =
-  with_fst ~fn:"Vcd_fst.blocks" path (fun t error ->
-      match Fst.blocks t with
-      | Error e -> raise (error e)
-      | Ok bs ->
-          Fst.close t;
-          Array.map
-            (fun (b : Fst.block) ->
-              (Vcd_types.Timestamp.of_int64 b.start_time, Vcd_types.Timestamp.of_int64 b.end_time))
-            bs)
+  let t = private_file ~fn:"Vcd_fst.blocks" path in
+  let r = File.blocks t in
+  File.close t;
+  match r with Ok bs -> bs | Error m -> raise (Vcd.Parse_error m)
 
 let open_at ?select path ~time =
-  with_fst ~fn:"Vcd_fst.open_at" path (fun t error ->
-      match ids_of t with
-      | Error e -> raise (error e)
-      | Ok ids ->
-          let time = Vcd_types.Timestamp.to_int64 time in
-          let block =
-            match Fst.blocks t with
-            | Error e -> raise (error e)
-            | Ok [||] -> 0
-            | Ok bs -> (
-                let k = ref 0 in
-                Array.iteri (fun i (b : Fst.block) -> if Int64.compare b.start_time time <= 0 then k := i) bs;
-                match Fst.aligned_block t !k with Ok j -> j | Error e -> raise (error e))
-          in
-          let definition, header = collector () in
-          let state, simulation = events ?select ~block t ~error ~ids ~definition in
-          (state, { Vcd.header = header (); simulation }))
+  let t = private_file ~fn:"Vcd_fst.open_at" path in
+  let state, r = start ?select ~at:time t in
+  (state, { r with simulation = owning t r.simulation })
