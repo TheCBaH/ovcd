@@ -61,7 +61,8 @@ module Resolver : sig
   (** The width of the ID's first declaration; aliases declared later do not change it. *)
 
   val entry_references : entry -> Ref_set.t
-  (** All hierarchical names that map to this ID (at least one; more when the signal is aliased). *)
+  (** All hierarchical names that map to this ID (at least one; more when the signal is aliased), except for entries
+      from {!find_all}. *)
 
   type t
 
@@ -81,7 +82,9 @@ module Resolver : sig
   (** Fold over all entries in ID order ([ID.compare]), once per distinct ID. *)
 
   val find_all : Filter_ast.pattern -> t -> entry list
-  (** [find_all pat t] returns all entries that have at least one reference matched by [pat]. Order is unspecified. *)
+  (** [find_all pat t] returns all entries that have at least one reference matched by [pat]. Order is unspecified. The
+      references of each returned entry are narrowed to the matching ones, unlike those of an entry from {!fold} or the
+      resolver. *)
 end
 
 type time_range = {

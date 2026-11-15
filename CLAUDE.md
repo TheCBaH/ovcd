@@ -18,7 +18,7 @@ All make targets wrap `opam exec -- dune`. To run a single test:
 
 ```bash
 opam exec -- dune runtest test/resolve.t      # one cram file
-opam exec -- dune runtest test/test_parse.ml  # one inline-test module
+opam exec -- dune runtest test/test_vcd.ml    # one inline-test module
 ```
 
 ## Architecture

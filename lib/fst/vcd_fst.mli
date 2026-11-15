@@ -8,6 +8,9 @@
     same identifier codes, except that reals keep every bit rather than [fst2vcd]'s 16 digits. Value changes are decoded
     one FST block at a time as the simulation sequence is consumed; the file is closed when it ends.
 
+    FST times are unsigned 64-bit, but {!Vcd_types.Timestamp.compare} is signed: a time at or above 2{^ 63} sorts before
+    0 in time ranges and {!Vcd.Stateful}. Such files are not supported.
+
     Usage:
     {[
       let { Vcd.header; simulation } = Vcd_fst.open_file "sim.fst" in
