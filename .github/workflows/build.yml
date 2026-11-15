@@ -21,6 +21,9 @@ jobs:
     - name: setup
       run: echo 'EXEC=${{ steps.devcontainer.outputs.exec }}' >> $GITHUB_ENV
 
+    - name: test-data pins
+      run: scripts/check-test-data-pins.sh
+
     - name: build
       run: ${{ env.EXEC }} make
 

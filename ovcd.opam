@@ -49,9 +49,9 @@ extra-source "test-data-pyDigitalWaveTools.tar.gz" {
 }
 extra-source "test-data-go-vcd-parser.tar.gz" {
   src:
-    "https://github.com/filmil/go-vcd-parser/archive/41e5baeadf3b2ef69311789ae19e2956eac9486c.tar.gz"
+    "https://github.com/filmil/go-vcd-parser/archive/22b3d57623813f58f0ab18dde6530487bcd72eb6.tar.gz"
   checksum: [
-    "sha256=b9de70f1a0b7824b0020f3cddfea6168a46c5d0b8cf8d67691a88cfd214e8776"
+    "sha256=422ab50de5af4ff7c34615349b212108478d8a1b79041f44496cdf668c0390a0"
   ]
 }
 build: [
@@ -87,6 +87,6 @@ dev-repo: "git+https://github.com/TheCBaH/ovcd.git"
 # not in opam-repository yet; pin-depends is not transitive, so all three are pinned here.
 pin-depends: [
   ["zipc.dev" "git+https://github.com/dbuenzli/zipc.git#076e6168a222dfe46b7ba598dc87a9a2e58b2569"]
-  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#32d68870539fb7422c86e5d8fc62db8568b173a7"]
-  ["unlz4.dev" "git+https://github.com/TheCBaH/ocaml-unlz4.git#f5446abf9a4ce4beb92b02ee958f345a6c8171bd"]
+  ["fst.dev" "git+https://github.com/TheCBaH/ocaml-fst.git#83ff8b97cd7e889c883bc3519e0b00ecd51c8c63"]
+  ["unlz4.dev" "git+https://github.com/TheCBaH/ocaml-unlz4.git#8db02229baf5bc2f45514618bfd2e07b0708bcf5"]
 ]
