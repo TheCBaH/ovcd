@@ -16,7 +16,9 @@ exception Parse_error of string
 
 type parse_result = {
   header : Vcd_ast.header;  (** Parsed header / declaration section. *)
-  simulation : Vcd_ast.event Seq.t;  (** Lazy sequence of simulation events; evaluated on demand. *)
+  simulation : Vcd_ast.event Seq.t;
+      (** Lazy sequence of simulation events; evaluated on demand. It reads a stream, so it can be traversed once: a
+          second traversal raises [Seq.Forced_twice]. *)
 }
 
 val parse_string : ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> string -> parse_result

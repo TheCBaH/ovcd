@@ -104,7 +104,7 @@ let events_seq ?select ?last_byte header lexbuf =
 
 let parse_lexbuf ?select ?last_byte lexbuf =
   let header = if last_byte = None then parse_header_exn lexbuf else parse_header_strict lexbuf in
-  { header; simulation = events_seq ?select ?last_byte header lexbuf }
+  { header; simulation = Seq.once (events_seq ?select ?last_byte header lexbuf) }
 
 (* ------------------------------------------------------------------ *)
 (*  Public API                                                         *)

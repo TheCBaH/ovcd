@@ -194,7 +194,7 @@ let events ?select ?(block = 0) t ~error ~ids ~ports =
       if resume then
         begin match Fst.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e)
         end;
-      (!state, next)
+      (!state, Seq.once next)
 
 let parse ?select ~name opened =
   let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)) in

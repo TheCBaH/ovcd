@@ -36,3 +36,18 @@ let%expect_test "parse_file closes on a header error" =
   with_temp "$scope $end\n" (fun path ->
       Printf.printf "%b\n" (leaked (fun () -> try ignore (Vcd.parse_file path) with Vcd.Parse_error _ -> ()) < 10));
   [%expect {| true |}]
+
+let twice name (r : Vcd.parse_result) =
+  Seq.iter ignore r.simulation;
+  match Seq.iter ignore r.simulation with
+  | () -> Printf.printf "%s: second traversal allowed\n" name
+  | exception Seq.Forced_twice -> Printf.printf "%s: Forced_twice\n" name
+
+let%expect_test "a second traversal raises" =
+  twice "string" (Vcd.parse_string vcd);
+  with_temp vcd (fun path -> twice "file" (Vcd.parse_file path));
+  twice "fst" (Vcd_fst.parse_file "data/fst2vcd/clean.fst");
+  [%expect {|
+    string: Forced_twice
+    file: Forced_twice
+    fst: Forced_twice |}]
