@@ -1,3 +1,5 @@
+module Vcd_lexer = Tlexer
+module Vcd_parser = Tparser
 open Vcd_ast
 
 (* ------------------------------------------------------------------ *)

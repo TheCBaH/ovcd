@@ -1,7 +1,7 @@
 (lang dune 3.0)
 (name ovcd)
 (using menhir 2.1)
-(generate_opam_files false)
+(generate_opam_files true)
 
 (source
  (github TheCBaH/ovcd))

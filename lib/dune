@@ -3,6 +3,7 @@
  (public_name ovcd)
  (wrapped false)
  (modules vcd_ast vcd_error vcd_lexer vcd_parser vcd)
+ (private_modules vcd_lexer vcd_parser)
  (libraries vcd_types vcd_filter fst)
  (ocamlopt_flags
   (:standard -O3)))
