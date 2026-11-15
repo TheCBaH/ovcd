@@ -18,248 +18,237 @@ let count_scopes_and_vars scopes =
 
 let show_id filter id = Vcd_util.mem_filter filter id
 
-let parse_pattern_or_exit r s =
-  match Filter_parser.parse s with
-  | Error msg ->
-      Printf.eprintf "error: invalid signal pattern %S: %s\n" s msg;
-      exit 1
-  | Ok pat -> r := (s, pat) :: !r
+type options = {
+  sel : Tool_cli.selection;
+  summary : bool;
+  bench_runs : int;
+  resolve : bool;
+  strip : bool;
+  list_signals : (string * Filter_ast.pattern) list;
+  jsonl : bool;
+}
 
-let warn_unmatched ~label (u : Vcd_util.unmatched) =
-  List.iter (Printf.eprintf "warning: %s %S matched no signals\n" label) u.patterns;
-  List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") u.regexes
+let list_signals o path =
+  (* Header-only query: print every matched signal's path, ID code and width.
+     Reuses the filter machinery so unmatched patterns warn on stderr and only
+     the references that actually matched are listed (not unselected aliases). *)
+  Tool_cli.with_parsed path @@ fun parsed ->
+  let h = parsed.header in
+  let resolver = Vcd.Resolver.make h in
+  let filter, unmatched = Vcd_util.build_filter resolver o.list_signals [] in
+  Tool_cli.warn_unmatched ~label:"--list-signals" unmatched;
+  let strip_map = if o.strip then Vcd_util.build_strip_map resolver filter else None in
+  if o.jsonl then begin
+    let wanted (s : Vcd_signals.t) =
+      let r = Vcd_types.Reference.of_list s.parts in
+      match Vcd.Resolver.find_id resolver r with
+      | None -> false
+      | Some id -> Vcd.Ref_set.mem r (Vcd_util.selected_refs resolver filter id)
+    in
+    Vcd_signals.write stdout (Seq.filter wanted (Vcd_signals.of_header h))
+  end
+  else begin
+    let rows =
+      Vcd.Resolver.fold
+        (fun entry acc ->
+          let id = Vcd.Resolver.entry_id entry in
+          let size = Vcd.Resolver.entry_size entry in
+          Vcd.Ref_set.fold
+            (fun r acc ->
+              (Vcd_types.Reference.to_string (Tool_cli.display strip_map r), Vcd_types.ID.to_string id, size) :: acc)
+            (Vcd_util.selected_refs resolver filter id)
+            acc)
+        resolver []
+    in
+    List.iter (fun (path, id, size) -> Printf.printf "%s\t%s\t%d\n" path id size) (List.sort_uniq compare rows)
+  end
 
-let with_parsed ?select path f =
-  match Vcd_fst.with_file ?select path f with
-  | v -> v
-  | exception Vcd.Error.E e ->
-      Printf.eprintf "%s\n" (Vcd_util.error_message e);
-      exit 1
-  | exception Failure msg ->
-      Printf.eprintf "error: %s\n" msg;
-      exit 1
+(* The filter exists only once the header is parsed; the first pull of the simulation reads it. *)
+let bench o ~select ~filter_ref path =
+  for _ = 1 to o.bench_runs do
+    Tool_cli.with_parsed ?select path @@ fun r ->
+    if o.resolve then begin
+      let resolver = Vcd.Resolver.make r.header in
+      let filter, unmatched = Vcd_util.build_filter resolver !(o.sel.patterns) !(o.sel.regexes) in
+      Tool_cli.warn_unmatched ~label:"--signal" unmatched;
+      filter_ref := filter;
+      Seq.iter (function Change (id, _) when show_id filter id -> () | _ -> ()) r.simulation
+    end
+    else Seq.iter ignore r.simulation
+  done
+
+let resolved o ~select ~filter_ref path =
+  let ranges = !(o.sel.ranges) in
+  Tool_cli.with_parsed ?select path @@ fun result ->
+  let resolver = Vcd.Resolver.make result.header in
+  let filter, unmatched = Vcd_util.build_filter resolver !(o.sel.patterns) !(o.sel.regexes) in
+  Tool_cli.warn_unmatched ~label:"--signal" unmatched;
+  filter_ref := filter;
+  let strip_map = if o.strip then Vcd_util.build_strip_map resolver filter else None in
+  let names_of id =
+    match Vcd.Resolver.find resolver id with
+    | None -> ([ Vcd_types.ID.to_string id ], 0)
+    | Some entry ->
+        let size = Vcd.Resolver.entry_size entry in
+        let names =
+          Vcd.Ref_set.fold
+            (fun r acc -> Vcd_types.Reference.to_string (Tool_cli.display strip_map r) :: acc)
+            (Vcd_util.selected_refs resolver filter id)
+            []
+        in
+        (names, size)
+  in
+  let cache = Hashtbl.create 256 in
+  let resolve id =
+    match Hashtbl.find_opt cache id with
+    | Some r -> r
+    | None ->
+        let r = names_of id in
+        Hashtbl.add cache id r;
+        r
+  in
+  let cur_in_range = ref (ranges = []) in
+  let pending_ts = ref None in
+  let flush () =
+    match !pending_ts with
+    | None -> ()
+    | Some t ->
+        Tool_out.text ("#" ^ Tool_out.ts t);
+        pending_ts := None
+  in
+  try
+    Seq.iter
+      (function
+        | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
+        | Timestamp t ->
+            let in_r = Vcd_util.in_ranges ranges t in
+            cur_in_range := in_r;
+            pending_ts := if in_r then Some t else None
+        | Change (id, v) when !cur_in_range && show_id filter id ->
+            flush ();
+            let names, size = resolve id in
+            let hex = Vcd_types.Value.to_string_hex size v in
+            List.iter (fun name -> Tool_out.assignment "  " name hex) names
+        | Change _ -> ()
+        | DumpStart k when !cur_in_range ->
+            flush ();
+            Tool_out.text ("$" ^ k)
+        | DumpStart _ -> ()
+        | DumpEnd when !cur_in_range -> Tool_out.text "$end"
+        | DumpEnd -> ()
+        | SimComment c when !cur_in_range ->
+            flush ();
+            Tool_out.text ("//" ^ c)
+        | SimComment _ -> ())
+      result.simulation
+  with Exit -> ()
+
+let overview o path =
+  let ranges = !(o.sel.ranges) in
+  Tool_cli.with_parsed path @@ fun result ->
+  let h = result.header in
+  Printf.printf "file:      %s\n" (Filename.basename path);
+  Printf.printf "date:      %s\n" (opt Fun.id h.date);
+  Printf.printf "version:   %s\n" (opt Fun.id h.version);
+  Printf.printf "timescale: %s\n" (opt Fun.id h.timescale);
+  Option.iter (Printf.printf "timezero:  %Ld\n") h.timezero;
+  if o.summary then begin
+    let ns, nv = count_scopes_and_vars h.scopes in
+    Printf.printf "scopes:    %d  vars: %d\n" ns nv
+  end
+  else List.iter (pp_scope "") h.scopes;
+  let cur_in_range = ref (ranges = []) in
+  let timestamps = ref 0 and changes = ref 0 and dumps = ref 0 and comments = ref 0 in
+  (try
+     Seq.iter
+       (function
+         | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
+         | Timestamp t ->
+             let in_r = Vcd_util.in_ranges ranges t in
+             cur_in_range := in_r;
+             if in_r then incr timestamps
+         | Change _ -> if !cur_in_range then incr changes
+         | DumpStart _ -> if !cur_in_range then incr dumps
+         | DumpEnd -> ()
+         | SimComment _ -> if !cur_in_range then incr comments)
+       result.simulation
+   with Exit -> ());
+  Printf.printf "events:    %d (timestamps: %d, changes: %d, dumps: %d, comments: %d)\n"
+    (!timestamps + !changes + !dumps + !comments)
+    !timestamps !changes !dumps !comments
 
 let main () =
-  let summary = ref false in
-  let bench_runs = ref 0 in
-  let resolve = ref false in
-  let strip = ref false in
-  let ranges = ref [] in
-  let patterns = ref [] in
-  let regexes = ref [] in
-  let list_signals = ref [] in
-  let format = ref "tsv" in
-  let files = ref [] in
+  let sel = Tool_cli.selection () in
+  let summary = ref false and bench_runs = ref 0 and resolve = ref false and strip = ref false in
+  let list_signals_pats = ref [] and format = ref None in
   let spec =
     [
       ("--summary", Arg.Set summary, " Print scope/var counts instead of tree");
       ( "--bench",
-        Arg.Int
-          (fun n ->
-            if n > 0 then bench_runs := n
-            else (
-              Printf.eprintf "error: --bench requires a positive integer\n";
-              exit 1)),
+        Arg.Int (fun n -> if n > 0 then bench_runs := n else Tool_cli.fail "error: --bench requires a positive integer"),
         "N  Parse N times for benchmarking" );
       ("--resolve", Arg.Set resolve, " Resolve IDs to hierarchical signal names in simulation output");
       ( "--strip",
         Arg.Set strip,
         " Strip the longest common scope prefix from all matched signal names (requires --resolve)" );
-      ( "--range",
-        Arg.String
-          (fun s ->
-            match Vcd_util.parse_range s with
-            | exception Failure msg ->
-                Printf.eprintf "error: invalid --range %S: %s\n" s msg;
-                exit 1
-            | r -> ranges := r :: !ranges),
-        "SPEC  Restrict to a time range, e.g. \"...1000\" or \"0-500\" or \"2000-...\"; may be repeated" );
-      ( "--signal",
-        Arg.String (parse_pattern_or_exit patterns),
-        "PATTERN  Show only matching signals (exact name or DSL pattern; may be repeated; implies --resolve)" );
-      ( "--signal-re",
-        Arg.String
-          (fun s ->
-            match Re.Pcre.re s |> Re.compile with
-            | exception exn ->
-                Printf.eprintf "error: invalid regex %S: %s\n" s (Printexc.to_string exn);
-                exit 1
-            | re -> regexes := (s, re) :: !regexes),
-        "REGEX  Show only signals whose full name matches this PCRE regex (may be repeated; implies --resolve)" );
-      ( "--list-signals",
-        Arg.String (parse_pattern_or_exit list_signals),
-        "PATTERN  List matching signals as 'path<TAB>id<TAB>width' and exit (may be repeated)" );
-      ( "--format",
-        Arg.Symbol ([ "tsv"; "jsonl" ], fun f -> format := f),
-        " Output of --list-signals: tsv (default), or jsonl in declaration order with var type and scope kinds" );
     ]
+    @ Tool_cli.selection_specs sel
+        ~signal_doc:
+          "PATTERN  Show only matching signals (exact name or DSL pattern; may be repeated; implies --resolve)"
+        ~regex_doc:
+          "REGEX  Show only signals whose full name matches this PCRE regex (may be repeated; implies --resolve)"
+    @ [
+        ( "--list-signals",
+          Arg.String (Tool_cli.add_pattern list_signals_pats),
+          "PATTERN  List matching signals as 'path<TAB>id<TAB>width' and exit (may be repeated)" );
+        ( "--format",
+          Arg.Symbol ([ "tsv"; "jsonl" ], fun f -> format := Some f),
+          " Output of --list-signals: tsv (default), or jsonl in declaration order with var type and scope kinds" );
+      ]
   in
   let usage =
     "usage: vcd_dump [--summary] [--bench N] [--resolve] [--strip] [--range SPEC]... [--signal PATTERN]... \
      [--signal-re REGEX]... [--list-signals PATTERN]... [--format tsv|jsonl] <file.vcd|file.fst>"
   in
-  Arg.parse spec (fun f -> files := f :: !files) usage;
-  let files = List.rev !files in
-  let ranges = List.rev !ranges in
-  let patterns = List.rev !patterns in
-  let regexes = List.rev !regexes in
-  let list_signals = List.rev !list_signals in
-  (* Selecting signals by name is only meaningful in the resolved output, so treat
-     --signal / --signal-re as implying --resolve. *)
-  if patterns <> [] || regexes <> [] then resolve := true;
-  if files = [] then (
-    Arg.usage spec usage;
-    exit 1);
-  (* The filter exists only once the header is parsed; the first pull of the simulation reads it. *)
-  let filter_ref = ref None in
-  let select =
-    if !resolve && (patterns <> [] || regexes <> []) then Some (fun id -> Vcd_util.mem_filter !filter_ref id) else None
+  let files = Tool_cli.parse_args spec usage in
+  let selecting = !(sel.patterns) <> [] || !(sel.regexes) <> [] in
+  let listing = !list_signals_pats <> [] in
+  let jsonl = !format = Some "jsonl" in
+  (* Selecting signals by name is only meaningful in the resolved output, so --signal / --signal-re imply
+     --resolve. *)
+  let resolve = !resolve || selecting in
+  Tool_cli.reject (!format <> None && not listing) "--format applies only to --list-signals";
+  Tool_cli.reject (!summary && listing) "--summary cannot be combined with --list-signals";
+  Tool_cli.reject (!summary && resolve) "--summary cannot be combined with --resolve, --signal or --signal-re";
+  Tool_cli.reject (selecting && listing)
+    "--signal and --signal-re cannot be combined with --list-signals (give the patterns to --list-signals)";
+  Tool_cli.reject (!strip && jsonl) "--strip cannot be combined with --format jsonl";
+  Tool_cli.reject (!strip && not (resolve || listing)) "--strip requires --resolve or --list-signals";
+  let o =
+    {
+      sel =
+        {
+          Tool_cli.ranges = ref (List.rev !(sel.ranges));
+          patterns = ref (List.rev !(sel.patterns));
+          regexes = ref (List.rev !(sel.regexes));
+        };
+      summary = !summary;
+      bench_runs = !bench_runs;
+      resolve;
+      strip = !strip;
+      list_signals = List.rev !list_signals_pats;
+      jsonl;
+    }
   in
+  let filter_ref = ref None in
+  let select = if o.resolve && selecting then Some (fun id -> Vcd_util.mem_filter !filter_ref id) else None in
   List.iter
     (fun path ->
-      if list_signals <> [] then begin
-        (* Header-only query: print every matched signal's path, ID code and width.
-           Reuses the filter machinery so unmatched patterns warn on stderr and only
-           the references that actually matched are listed (not unselected aliases). *)
-        with_parsed path @@ fun parsed ->
-        let h = parsed.header in
-        let resolver = Vcd.Resolver.make h in
-        let filter, unmatched = Vcd_util.build_filter resolver list_signals [] in
-        warn_unmatched ~label:"--list-signals" unmatched;
-        let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
-        let rows =
-          Vcd.Resolver.fold
-            (fun entry acc ->
-              let id = Vcd.Resolver.entry_id entry in
-              let size = Vcd.Resolver.entry_size entry in
-              Vcd.Ref_set.fold
-                (fun r acc ->
-                  let display = match strip_map with None -> r | Some f -> f r in
-                  (Vcd_types.Reference.to_string display, Vcd_types.ID.to_string id, size) :: acc)
-                (Vcd_util.selected_refs resolver filter id)
-                acc)
-            resolver []
-        in
-        if !format = "jsonl" then begin
-          let wanted (s : Vcd_signals.t) =
-            let r = Vcd_types.Reference.of_list s.parts in
-            match Vcd.Resolver.find_id resolver r with
-            | None -> false
-            | Some id -> Vcd.Ref_set.mem r (Vcd_util.selected_refs resolver filter id)
-          in
-          Vcd_signals.write stdout (Seq.filter wanted (Vcd_signals.of_header h))
-        end
-        else List.iter (fun (path, id, size) -> Printf.printf "%s\t%s\t%d\n" path id size) (List.sort_uniq compare rows)
-      end
-      else if !bench_runs > 0 then begin
-        for _ = 1 to !bench_runs do
-          with_parsed ?select path @@ fun r ->
-          if !resolve then begin
-            let resolver = Vcd.Resolver.make r.header in
-            let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
-            warn_unmatched ~label:"--signal" unmatched;
-            filter_ref := filter;
-            Seq.iter (function Change (id, _) when show_id filter id -> () | _ -> ()) r.simulation
-          end
-          else Seq.iter ignore r.simulation
-        done
-      end
-      else begin
-        with_parsed ?select path @@ fun result ->
-        let h = result.header in
-        if !resolve then begin
-          let resolver = Vcd.Resolver.make h in
-          let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
-          warn_unmatched ~label:"--signal" unmatched;
-          filter_ref := filter;
-          let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
-          let resolve id =
-            match Vcd.Resolver.find resolver id with
-            | None -> ([ Vcd_types.ID.to_string id ], 0)
-            | Some entry ->
-                let size = Vcd.Resolver.entry_size entry in
-                let names =
-                  Vcd.Ref_set.fold
-                    (fun r acc ->
-                      let display = match strip_map with None -> r | Some f -> f r in
-                      Vcd_types.Reference.to_string display :: acc)
-                    (Vcd_util.selected_refs resolver filter id)
-                    []
-                in
-                (names, size)
-          in
-          let cur_in_range = ref (ranges = []) in
-          let pending_ts = ref None in
-          let flush () =
-            match !pending_ts with
-            | None -> ()
-            | Some t ->
-                Format.printf "#%a\n" Vcd_types.Timestamp.pp t;
-                pending_ts := None
-          in
-          try
-            Seq.iter
-              (function
-                | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
-                | Timestamp t ->
-                    let in_r = Vcd_util.in_ranges ranges t in
-                    cur_in_range := in_r;
-                    pending_ts := if in_r then Some t else None
-                | Change (id, v) when !cur_in_range && show_id filter id ->
-                    flush ();
-                    let names, size = resolve id in
-                    List.iter (fun name -> Format.printf "  %s=%s\n" name (Vcd_types.Value.to_string_hex size v)) names
-                | Change _ -> ()
-                | DumpStart k when !cur_in_range ->
-                    flush ();
-                    Format.printf "$%s\n" k
-                | DumpStart _ -> ()
-                | DumpEnd when !cur_in_range -> Format.printf "$end\n"
-                | DumpEnd -> ()
-                | SimComment c when !cur_in_range ->
-                    flush ();
-                    Format.printf "//%s\n" c
-                | SimComment _ -> ())
-              result.simulation
-          with Exit -> ()
-        end
-        else begin
-          Printf.printf "file:      %s\n" (Filename.basename path);
-          Printf.printf "date:      %s\n" (opt Fun.id h.date);
-          Printf.printf "version:   %s\n" (opt Fun.id h.version);
-          Printf.printf "timescale: %s\n" (opt Fun.id h.timescale);
-          Option.iter (Printf.printf "timezero:  %Ld\n") h.timezero;
-          if !summary then begin
-            let ns, nv = count_scopes_and_vars h.scopes in
-            Printf.printf "scopes:    %d  vars: %d\n" ns nv
-          end
-          else List.iter (pp_scope "") h.scopes;
-          let cur_in_range = ref (ranges = []) in
-          let timestamps = ref 0 and changes = ref 0 and dumps = ref 0 and comments = ref 0 in
-          (try
-             Seq.iter
-               (function
-                 | Timestamp t when Vcd_util.past_all_ranges ranges t -> raise Exit
-                 | Timestamp t ->
-                     let in_r = Vcd_util.in_ranges ranges t in
-                     cur_in_range := in_r;
-                     if in_r then incr timestamps
-                 | Change _ -> if !cur_in_range then incr changes
-                 | DumpStart _ -> if !cur_in_range then incr dumps
-                 | DumpEnd -> ()
-                 | SimComment _ -> if !cur_in_range then incr comments)
-               result.simulation
-           with Exit -> ());
-          Printf.printf "events:    %d (timestamps: %d, changes: %d, dumps: %d, comments: %d)\n"
-            (!timestamps + !changes + !dumps + !comments)
-            !timestamps !changes !dumps !comments
-        end
-      end)
+      if listing then list_signals o path
+      else if o.bench_runs > 0 then bench o ~select ~filter_ref path
+      else if o.resolve then resolved o ~select ~filter_ref path
+      else overview o path)
     files
 
 (* Value changes are parsed lazily, so their errors surface while iterating. *)
-let () =
-  try main ()
-  with Vcd.Error.E e ->
-    Printf.eprintf "%s\n" (Vcd_util.error_message e);
-    exit 1
+let () = Tool_cli.run main

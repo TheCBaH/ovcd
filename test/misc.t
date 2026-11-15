@@ -142,3 +142,28 @@ it with an error naming the signal, and valid UTF-8 passes through:
   {"path":"top.café","parts":["top","café"],"scope_types":["module"],"id":"!","width":1,"var_type":"wire"}
   error: signal "top.caf\233": name is not valid UTF-8
   [1]
+
+Flag combinations that would silently do nothing are errors:
+
+  $ E=../test-data/pyDigitalWaveTools/tests/example0.vcd
+  $ ./vcd_dump --summary --resolve $E
+  error: --summary cannot be combined with --resolve, --signal or --signal-re
+  [1]
+  $ ./vcd_dump --summary --signal 'unit0.*' $E
+  error: --summary cannot be combined with --resolve, --signal or --signal-re
+  [1]
+  $ ./vcd_dump --summary --list-signals '**' $E
+  error: --summary cannot be combined with --list-signals
+  [1]
+  $ ./vcd_dump --format jsonl $E
+  error: --format applies only to --list-signals
+  [1]
+  $ ./vcd_dump --list-signals '**' --signal 'unit0.*' $E
+  error: --signal and --signal-re cannot be combined with --list-signals (give the patterns to --list-signals)
+  [1]
+  $ ./vcd_dump --list-signals '**' --strip --format jsonl $E
+  error: --strip cannot be combined with --format jsonl
+  [1]
+  $ ./vcd_dump --strip $E
+  error: --strip requires --resolve or --list-signals
+  [1]
