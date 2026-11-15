@@ -104,6 +104,23 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       end)
     events
 
+let warn_unmatched ~label (u : Vcd_util.unmatched) =
+  List.iter (Printf.eprintf "warning: %s %S matched no signals\n" label) u.patterns;
+  List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") u.regexes
+
+let with_parsed ?select path f =
+  match Vcd_fst.with_file ?select path f with
+  | v -> v
+  | exception Vcd.Parse_error msg ->
+      Printf.eprintf "parse error: %s\n" msg;
+      exit 1
+  | exception Sys_error msg ->
+      Printf.eprintf "%s\n" msg;
+      exit 1
+  | exception Failure msg ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+
 let main () =
   let ranges = ref [] in
   let patterns = ref [] in
@@ -190,24 +207,20 @@ let main () =
   if files = [] then (
     Arg.usage spec usage;
     exit 1);
+  (* The IDs to read are known only once the header is parsed; the first pull of the simulation asks. *)
+  let wanted = ref None in
+  let select =
+    if when_specs <> [] || patterns <> [] || regexes <> [] then
+      Some (fun id -> match !wanted with None -> true | Some s -> Vcd.ID_set.mem id s)
+    else None
+  in
   List.iter
     (fun path ->
-      let result =
-        match Vcd_fst.open_file path with
-        | r -> r
-        | exception Vcd.Parse_error msg ->
-            Printf.eprintf "parse error: %s\n" msg;
-            exit 1
-        | exception Sys_error msg ->
-            Printf.eprintf "%s\n" msg;
-            exit 1
-        | exception Failure msg ->
-            Printf.eprintf "error: %s\n" msg;
-            exit 1
-      in
+      with_parsed ?select path @@ fun result ->
       let resolver = Vcd.Resolver.make result.header in
       if when_specs <> [] then begin
-        let show_filter = Vcd_util.build_filter ~pattern_label:"--show" resolver show_patterns [] in
+        let show_filter, unmatched = Vcd_util.build_filter resolver show_patterns [] in
+        warn_unmatched ~label:"--show" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver show_filter else None in
         let trigger_ids =
           List.fold_left
@@ -219,12 +232,15 @@ let main () =
         in
         let show_ids = match show_filter with Some f -> Vcd_util.filter_ids f | None -> Vcd.ID_set.empty in
         let tracked = Vcd.ID_set.union trigger_ids show_ids in
+        wanted := Some tracked;
         let events = Stateful.stream ~tracked ~ranges result.simulation in
         correlate resolver strip_map ~when_specs ~show_filter ~lookback events
       end
       else begin
-        let filter = Vcd_util.build_filter resolver patterns regexes in
+        let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+        warn_unmatched ~label:"--signal" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
+        wanted := Option.map Vcd_util.filter_ids filter;
         let events =
           match filter with
           | None -> Stateful.stream ~ranges result.simulation

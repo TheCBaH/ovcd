@@ -10,40 +10,51 @@ module Ref_map = Vcd.Ref_map
    the user's patterns selected. Kept separate from ID_set so display code
    can avoid printing unselected aliases of a matched ID. *)
 type filter = Vcd.Ref_set.t ID_map.t
+type unmatched = { patterns : string list; regexes : string list }
 
-let ref_matches_any patterns regexes r =
-  List.exists (fun (_, pat) -> Filter_matcher.matches pat r) patterns
-  ||
-  match regexes with
-  | [] -> false
-  | _ -> List.exists (fun (_, re) -> Re.execp re (Vcd_types.Reference.to_string r)) regexes
+let add_refs id refs m =
+  ID_map.update id (function None -> Some refs | Some old -> Some (Vcd.Ref_set.union old refs)) m
 
-let build_filter ?(pattern_label = "--signal") resolver patterns regexes =
-  if patterns = [] && regexes = [] then None
+let build_filter resolver patterns regexes =
+  if patterns = [] && regexes = [] then (None, { patterns = []; regexes = [] })
   else begin
+    let id_map, no_pattern =
+      List.fold_left
+        (fun (m, missed) (s, pat) ->
+          match Vcd.Resolver.find_all pat resolver with
+          | [] -> (m, s :: missed)
+          | entries ->
+              ( List.fold_left
+                  (fun m e -> add_refs (Vcd.Resolver.entry_id e) (Vcd.Resolver.entry_references e) m)
+                  m entries,
+                missed ))
+        (ID_map.empty, []) patterns
+    in
+    let res = Array.of_list regexes in
+    let hit = Array.make (Array.length res) false in
+    let ref_matches r =
+      let name = Vcd_types.Reference.to_string r in
+      let any = ref false in
+      Array.iteri
+        (fun i (_, re) ->
+          if Re.execp re name then begin
+            hit.(i) <- true;
+            any := true
+          end)
+        res;
+      !any
+    in
     let id_map =
-      Vcd.Resolver.fold
-        (fun entry acc ->
-          let matched_refs =
-            Vcd.Ref_set.filter (ref_matches_any patterns regexes) (Vcd.Resolver.entry_references entry)
-          in
-          if Vcd.Ref_set.is_empty matched_refs then acc else ID_map.add (Vcd.Resolver.entry_id entry) matched_refs acc)
-        resolver ID_map.empty
+      if regexes = [] then id_map
+      else
+        Vcd.Resolver.fold
+          (fun entry acc ->
+            let refs = Vcd.Ref_set.filter ref_matches (Vcd.Resolver.entry_references entry) in
+            if Vcd.Ref_set.is_empty refs then acc else add_refs (Vcd.Resolver.entry_id entry) refs acc)
+          resolver id_map
     in
-    let any_ref_matches f =
-      Vcd.Resolver.fold (fun e b -> b || Vcd.Ref_set.exists f (Vcd.Resolver.entry_references e)) resolver false
-    in
-    List.iter
-      (fun (s, pat) ->
-        if not (any_ref_matches (Filter_matcher.matches pat)) then
-          Printf.eprintf "warning: %s %S matched no signals\n" pattern_label s)
-      patterns;
-    List.iter
-      (fun (s, re) ->
-        if not (any_ref_matches (fun r -> Re.execp re (Vcd_types.Reference.to_string r))) then
-          Printf.eprintf "warning: --signal-re %S matched no signals\n" s)
-      regexes;
-    Some id_map
+    let no_regex = List.filteri (fun i _ -> not hit.(i)) regexes |> List.map fst in
+    (Some id_map, { patterns = List.rev no_pattern; regexes = no_regex })
   end
 
 let filter_ids f = ID_map.fold (fun id _ acc -> ID_set.add id acc) f ID_set.empty

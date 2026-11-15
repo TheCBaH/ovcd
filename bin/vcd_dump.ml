@@ -25,6 +25,23 @@ let parse_pattern_or_exit r s =
       exit 1
   | Ok pat -> r := (s, pat) :: !r
 
+let warn_unmatched ~label (u : Vcd_util.unmatched) =
+  List.iter (Printf.eprintf "warning: %s %S matched no signals\n" label) u.patterns;
+  List.iter (Printf.eprintf "warning: --signal-re %S matched no signals\n") u.regexes
+
+let with_parsed ?select path f =
+  match Vcd_fst.with_file ?select path f with
+  | v -> v
+  | exception Vcd.Parse_error msg ->
+      Printf.eprintf "parse error: %s\n" msg;
+      exit 1
+  | exception Sys_error msg ->
+      Printf.eprintf "%s\n" msg;
+      exit 1
+  | exception Failure msg ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+
 let main () =
   let summary = ref false in
   let bench_runs = ref 0 in
@@ -96,28 +113,22 @@ let main () =
   if files = [] then (
     Arg.usage spec usage;
     exit 1);
+  (* The filter exists only once the header is parsed; the first pull of the simulation reads it. *)
+  let filter_ref = ref None in
+  let select =
+    if !resolve && (patterns <> [] || regexes <> []) then Some (fun id -> Vcd_util.mem_filter !filter_ref id) else None
+  in
   List.iter
     (fun path ->
-      let parse () =
-        match Vcd_fst.open_file path with
-        | r -> r
-        | exception Vcd.Parse_error msg ->
-            Printf.eprintf "parse error: %s\n" msg;
-            exit 1
-        | exception Sys_error msg ->
-            Printf.eprintf "%s\n" msg;
-            exit 1
-        | exception Failure msg ->
-            Printf.eprintf "error: %s\n" msg;
-            exit 1
-      in
       if list_signals <> [] then begin
         (* Header-only query: print every matched signal's path, ID code and width.
            Reuses the filter machinery so unmatched patterns warn on stderr and only
            the references that actually matched are listed (not unselected aliases). *)
-        let h = (parse ()).header in
+        with_parsed path @@ fun parsed ->
+        let h = parsed.header in
         let resolver = Vcd.Resolver.make h in
-        let filter = Vcd_util.build_filter ~pattern_label:"--list-signals" resolver list_signals [] in
+        let filter, unmatched = Vcd_util.build_filter resolver list_signals [] in
+        warn_unmatched ~label:"--list-signals" unmatched;
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
         let rows =
           Vcd.Resolver.fold
@@ -145,21 +156,25 @@ let main () =
       end
       else if !bench_runs > 0 then begin
         for _ = 1 to !bench_runs do
-          let r = parse () in
+          with_parsed ?select path @@ fun r ->
           if !resolve then begin
             let resolver = Vcd.Resolver.make r.header in
-            let filter = Vcd_util.build_filter resolver patterns regexes in
+            let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+            warn_unmatched ~label:"--signal" unmatched;
+            filter_ref := filter;
             Seq.iter (function Change (id, _) when show_id filter id -> () | _ -> ()) r.simulation
           end
           else Seq.iter ignore r.simulation
         done
       end
       else begin
-        let result = parse () in
+        with_parsed ?select path @@ fun result ->
         let h = result.header in
         if !resolve then begin
           let resolver = Vcd.Resolver.make h in
-          let filter = Vcd_util.build_filter resolver patterns regexes in
+          let filter, unmatched = Vcd_util.build_filter resolver patterns regexes in
+          warn_unmatched ~label:"--signal" unmatched;
+          filter_ref := filter;
           let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
           let resolve id =
             match Vcd.Resolver.find resolver id with
