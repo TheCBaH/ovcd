@@ -254,11 +254,9 @@ $end
 
 let%expect_test "parse error is caught" =
   (match Vcd.parse_string "$scope module $end $enddefinitions $end" with
-  | exception Vcd.Parse_error msg ->
-      let is_err = String.length msg > 0 in
-      Printf.printf "Parse_error raised: %b\n" is_err
+  | exception Vcd.Error.E e -> print_endline (Vcd.Error.to_string e)
   | _ -> Printf.printf "no error\n");
-  [%expect {| Parse_error raised: true |}]
+  [%expect {| syntax error at <string> line 1 col 18 |}]
 
 (* ------------------------------------------------------------------ *)
 (*  Resolver                                                           *)

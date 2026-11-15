@@ -11,8 +11,8 @@
       ...
     ]} *)
 
-exception Parse_error of string
-(** Raised with a human-readable message on parse errors. *)
+module Error = Vcd_error
+(** Typed errors: see {!Vcd_error}. *)
 
 type parse_result = {
   header : Vcd_ast.header;  (** Parsed header / declaration section. *)
@@ -26,8 +26,8 @@ val parse_string : ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> string ->
 
     With [strict] (default [false]) the input must be complete, as a cut stream is not: the header must end with
     [$enddefinitions], no dump block may be open at the end, and the last byte must be a newline. The first is raised
-    from [parse_string] itself, the other two when the simulation is pulled to its end, all as {!Parse_error} with a
-    position. Lenient parsing accepts all three.
+    from [parse_string] itself, the other two when the simulation is pulled to its end, all as {!Error.E} with an
+    [`Incomplete] position. Lenient parsing accepts all three.
 
     With [select], the simulation has only the [Change] events of selected IDs; every other event stays. [select] is not
     called while the header is parsed: the first pull from the simulation calls it once for each distinct ID the header
@@ -35,16 +35,30 @@ val parse_string : ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> string ->
     dropped. Unselected changes are still lexed, but no value is made of them. *)
 
 val parse_channel : ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> in_channel -> parse_result
-(** Parse from an already-open [in_channel]. [select] and [strict] are as in {!parse_string}. *)
+(** Parse from an already-open [in_channel]. Raises {!Error.E} with [`Io] if reading fails. [select] and [strict] are as
+    in {!parse_string}. *)
 
 val parse_file : ?select:(Vcd_types.ID.t -> bool) -> string -> parse_result
-(** Parse a VCD file by path. The simulation [Seq.t] is lazy; the file is closed when the sequence ends or raises, and
-    on a header error. A caller that stops early leaves it open: see {!with_file}. [select] is as in {!parse_string}. *)
+(** Parse a VCD file by path. Raises {!Error.E}, with [`Io] if it cannot be opened. The simulation [Seq.t] is lazy; the
+    file is closed when the sequence ends or raises, and on a header error. A caller that stops early leaves it open:
+    see {!with_file}. [select] is as in {!parse_string}. *)
 
 val with_file : ?select:(Vcd_types.ID.t -> bool) -> string -> (parse_result -> 'a) -> 'a
 (** [with_file path f] parses a VCD file and applies [f] to the result, closing the file when [f] returns or raises. The
     simulation must not be used after [f] returns. [select] is as in {!parse_string}. Prefer it to {!parse_file} when
     the simulation may not be read to its end. *)
+
+val parse_string_result :
+  ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> string -> (parse_result, Error.error) result
+(** {!parse_string} returning the errors it raises before the simulation starts. Errors found while pulling the
+    simulation still raise {!Error.E}. *)
+
+val parse_channel_result :
+  ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> in_channel -> (parse_result, Error.error) result
+(** {!parse_channel} as {!parse_string_result} does. *)
+
+val parse_file_result : ?select:(Vcd_types.ID.t -> bool) -> string -> (parse_result, Error.error) result
+(** {!parse_file} as {!parse_string_result} does. *)
 
 module ID_map : Map.S with type key = Vcd_types.ID.t
 (** Map keyed on signal identifiers. *)

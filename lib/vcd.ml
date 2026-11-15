@@ -2,7 +2,7 @@
 [@@@ai_model "claude-sonnet-4-6"]
 [@@@ai_provider "Anthropic"]
 
-exception Parse_error of string
+module Error = Vcd_error
 
 type parse_result = {
   header : Vcd_ast.header;  (** Parsed header / declaration section. *)
@@ -23,27 +23,25 @@ let make_lexbuf_from_string s =
   lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = "<string>" };
   lexbuf
 
+let open_bin path = try open_in_bin path with Sys_error m -> raise (Error.E (`Io m))
+
 let make_lexbuf_from_file path =
-  let ic = open_in_bin path in
+  let ic = open_bin path in
   let lexbuf = Lexing.from_channel ic in
   lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = path };
   (lexbuf, ic)
 
-let parse_header_exn ?(token = Vcd_lexer.token) lexbuf =
-  try Vcd_parser.parse_header token lexbuf with
-  | Vcd_parser.Error ->
-      let pos = lexbuf.Lexing.lex_curr_p in
-      raise
-        (Parse_error
-           (Printf.sprintf "syntax error at %s line %d col %d" pos.Lexing.pos_fname pos.Lexing.pos_lnum
-              (pos.Lexing.pos_cnum - pos.Lexing.pos_bol)))
-  | Failure msg -> raise (Parse_error msg)
+(* Errors with a position, and read failures, leave as [Error.E]. *)
+let translate f =
+  try f () with Error.Located (p, m) -> raise (Error.E (`Syntax (p, m))) | Sys_error m -> raise (Error.E (`Io m))
 
-let strict_error lexbuf msg =
-  let pos = lexbuf.Lexing.lex_curr_p in
-  Parse_error
-    (Printf.sprintf "%s at %s line %d col %d" msg pos.Lexing.pos_fname pos.Lexing.pos_lnum
-       (pos.Lexing.pos_cnum - pos.Lexing.pos_bol))
+let syntax_error lexbuf msg = raise (Error.E (`Syntax (Error.pos_of_lexing lexbuf.Lexing.lex_curr_p, msg)))
+
+let parse_header_exn ?(token = Vcd_lexer.token) lexbuf =
+  translate (fun () ->
+      try Vcd_parser.parse_header token lexbuf with Vcd_parser.Error -> syntax_error lexbuf "syntax error")
+
+let strict_error lexbuf msg = Error.E (`Incomplete (Error.pos_of_lexing lexbuf.Lexing.lex_curr_p, msg))
 
 (* $enddefinitions is what ends the header; the grammar also accepts EOF there, which strict parsing rejects. *)
 let parse_header_strict lexbuf =
@@ -87,7 +85,7 @@ let events_seq ?select ?last_byte header lexbuf =
           chosen := Some k;
           k
     in
-    match Vcd_lexer.next_selected keep lexbuf with
+    match translate (fun () -> Vcd_lexer.next_selected keep lexbuf) with
     | Some ev ->
         (match ev with Vcd_ast.DumpStart _ -> in_dump := true | Vcd_ast.DumpEnd -> in_dump := false | _ -> ());
         Seq.Cons (ev, next)
@@ -98,7 +96,6 @@ let events_seq ?select ?last_byte header lexbuf =
             if last () <> Some '\n' then raise (strict_error lexbuf "input does not end with a newline");
             if !in_dump then raise (strict_error lexbuf "unterminated dump block at end of input");
             Seq.Nil)
-    | exception Failure msg -> raise (Parse_error msg)
   in
   next
 
@@ -150,6 +147,10 @@ let parse_file ?select path =
 let with_file ?select path f =
   let lexbuf, ic = make_lexbuf_from_file path in
   Fun.protect ~finally:(fun () -> close_in_noerr ic) (fun () -> f (parse_lexbuf ?select lexbuf))
+
+let parse_string_result ?select ?strict s = Error.catch (fun () -> parse_string ?select ?strict s)
+let parse_channel_result ?select ?strict ic = Error.catch (fun () -> parse_channel ?select ?strict ic)
+let parse_file_result ?select path = Error.catch (fun () -> parse_file ?select path)
 
 (* ------------------------------------------------------------------ *)
 (*  Shared key-indexed containers                                     *)

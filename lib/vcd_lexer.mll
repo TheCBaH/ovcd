@@ -73,9 +73,7 @@
 
   let unexpected lexbuf c =
     let p = Lexing.lexeme_start_p lexbuf in
-    let file = if p.Lexing.pos_fname = "" then "" else p.Lexing.pos_fname ^ " " in
-    failwith
-      (Printf.sprintf "unexpected %C at %sline %d col %d" c file p.Lexing.pos_lnum (p.Lexing.pos_cnum - p.Lexing.pos_bol))
+    Vcd_error.located p (Printf.sprintf "unexpected %C" c)
 }
 
 (* ------------------------------------------------------------------ *)
@@ -112,7 +110,7 @@ and collect_text buf = parse
   | white+ as w    { newlines lexbuf w; Buffer.add_char buf ' '; collect_text buf lexbuf }
   | "$end"         { String.trim (Buffer.contents buf) }
   | word as w      { Buffer.add_string buf w; collect_text buf lexbuf }
-  | eof            { failwith "unexpected EOF inside keyword block" }
+  | eof            { Vcd_error.located lexbuf.Lexing.lex_curr_p "unexpected EOF inside keyword block" }
   | _              { collect_text buf lexbuf }
 
 (* ------------------------------------------------------------------ *)
@@ -126,7 +124,9 @@ and next_selected keep = parse
       { next_selected keep lexbuf }
 
   | '#' (digit+ as n)
-      { Some (Vcd_ast.Timestamp (Vcd_types.Timestamp.of_string n)) }
+      { match Int64.of_string_opt n with
+        | Some t -> Some (Vcd_ast.Timestamp (Vcd_types.Timestamp.of_int64 t))
+        | None -> Vcd_error.located (Lexing.lexeme_start_p lexbuf) ("invalid timestamp " ^ n) }
 
   (* Scalar: logic char immediately followed by id chars (no space) *)
   | (scalarchar as v) (idchar+ as id)

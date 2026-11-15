@@ -182,7 +182,8 @@ let%expect_test "unknown $keyword block in the simulation section is skipped" =
     $end |}]
 
 let%expect_test "unexpected character reports its line" =
-  (try print_string (show_events "#0\n1!\n  %oops") with Failure msg -> print_string msg);
+  (try print_string (show_events "#0\n1!\n  %oops")
+   with Vcd_error.Located (p, m) -> Vcd.Error.pp_error Format.std_formatter (`Syntax (p, m)));
   [%expect {| unexpected '%' at line 3 col 2 |}]
 
 let%expect_test "timezero tokens" =

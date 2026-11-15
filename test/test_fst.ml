@@ -10,7 +10,7 @@ let%expect_test "a frame byte outside the 9-state alphabet is Other" =
   [%expect {| !=bQ |}]
 
 let multi = "data/fst2vcd/kitchen.fst"
-let open_file path = match Vcd_fst.File.open_ path with Ok f -> f | Error m -> failwith m
+let open_file path = match Vcd_fst.File.open_ path with Ok f -> f | Error e -> failwith (Vcd.Error.to_string e)
 let pull_n n s = List.of_seq (Seq.take n s)
 let rest s = match s () with Seq.Cons (_, k) -> k | Nil -> s
 
@@ -36,7 +36,7 @@ let pull_error s =
   try
     ignore (Seq.length s);
     "ok"
-  with Vcd.Parse_error m -> m
+  with Vcd.Error.E e -> Vcd.Error.to_string e
 
 let%expect_test "a new stream or close invalidates earlier streams" =
   let f = open_file multi in
@@ -48,8 +48,10 @@ let%expect_test "a new stream or close invalidates earlier streams" =
   Vcd_fst.File.close f;
   print_endline (pull_error b);
   Vcd_fst.File.close f;
-  (match Vcd_fst.File.stream f with _ -> () | exception Vcd.Parse_error m -> print_endline m);
-  (match Vcd_fst.File.blocks f with Error m -> print_endline m | Ok _ -> print_endline "blocks ok");
+  (match Vcd_fst.File.stream f with _ -> () | exception Vcd.Error.E e -> print_endline (Vcd.Error.to_string e));
+  (match Vcd_fst.File.blocks f with
+  | Error e -> print_endline (Vcd.Error.to_string e)
+  | Ok _ -> print_endline "blocks ok");
   [%expect
     {|
     data/fst2vcd/kitchen.fst: stream superseded

@@ -24,16 +24,16 @@ val detect_string : string -> format
 (** [`Fst] when the data starts with an FST header block or a gzip-wrapped FST, [`Vcd] otherwise. *)
 
 val detect_file : string -> format
-(** {!detect_string} on the first bytes of a file. Raises [Sys_error] if it cannot be read. *)
+(** {!detect_string} on the first bytes of a file. Raises {!Vcd.Error.E} with [`Io] if it cannot be read. *)
 
 val parse_string : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
-(** Parse an FST held in memory. Raises {!Vcd.Parse_error}.
+(** Parse an FST held in memory. Raises {!Vcd.Error.E}.
 
     [select] is as in {!Vcd.parse_string}: the first pull calls it once per distinct ID, and the changes of unselected
     IDs are neither decompressed nor made into events. *)
 
 val parse_file : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
-(** Parse an FST file by path. Raises {!Vcd.Parse_error}, or [Sys_error] if it cannot be opened. *)
+(** Parse an FST file by path. Raises {!Vcd.Error.E}, with [`Io] if it cannot be opened. *)
 
 val open_string : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 (** {!parse_string} or {!Vcd.parse_string}, as {!detect_string} decides. *)
@@ -46,12 +46,12 @@ val with_file : ?select:(Vcd_types.ID.t -> bool) -> string -> (Vcd.parse_result 
 
 val blocks : string -> (Vcd_types.Timestamp.t * Vcd_types.Timestamp.t) array
 (** The start and end times of an FST file's value change blocks, read from their headers alone. Raises as {!parse_file}
-    does, and [Invalid_argument] for a VCD file. *)
+    does, and {!Vcd.Error.E} with [`Not_fst] for a VCD file. *)
 
 val open_at :
   ?select:(Vcd_types.ID.t -> bool) -> string -> time:Vcd_types.Timestamp.t -> Vcd.Stateful.state * Vcd.parse_result
 (** [open_at path ~time] starts reading an FST file at a block boundary instead of at the beginning. Raises as
-    {!parse_file} does, and [Invalid_argument] for a VCD file.
+    {!parse_file} does, and {!Vcd.Error.E} with [`Not_fst] for a VCD file.
 
     The block is the last one that starts at or before [time] (the first if none does), moved back while a timestamp has
     changes both in it and in the block before. The stream therefore starts at a whole timestep, which is {e not} [time]
@@ -66,6 +66,23 @@ val open_at :
     stream's [$dumpvars] changes, as usual. The state may otherwise hold IDs that the full stream has not yet assigned,
     at the value the file's frame gives them. *)
 
+(** {2 Result variants}
+
+    Each is the function of the same name with the errors it raises before the simulation starts returned as [Error].
+    Errors found while pulling a simulation still raise {!Vcd.Error.E}. *)
+
+val parse_string_result : ?select:(Vcd_types.ID.t -> bool) -> string -> (Vcd.parse_result, Vcd.Error.error) result
+val parse_file_result : ?select:(Vcd_types.ID.t -> bool) -> string -> (Vcd.parse_result, Vcd.Error.error) result
+val open_string_result : ?select:(Vcd_types.ID.t -> bool) -> string -> (Vcd.parse_result, Vcd.Error.error) result
+val open_file_result : ?select:(Vcd_types.ID.t -> bool) -> string -> (Vcd.parse_result, Vcd.Error.error) result
+val blocks_result : string -> ((Vcd_types.Timestamp.t * Vcd_types.Timestamp.t) array, Vcd.Error.error) result
+
+val open_at_result :
+  ?select:(Vcd_types.ID.t -> bool) ->
+  string ->
+  time:Vcd_types.Timestamp.t ->
+  (Vcd.Stateful.state * Vcd.parse_result, Vcd.Error.error) result
+
 (** An open FST file, for readers that start several streams on one file (a viewer that seeks).
 
     The handle caches what is expensive to recompute: the header ovcd builds, the identifier codes, and what the FST
@@ -73,26 +90,25 @@ val open_at :
 
     A handle is single-owner and not thread-safe. A stream {e borrows} the handle: it never closes it, at its end or on
     an error, and the caller calls {!close}. Because the streams of one handle share a file position, a new {!stream} or
-    a {!close} invalidates the earlier streams: their next pull raises {!Vcd.Parse_error} ("stream superseded" or
-    "handle closed"), even if events were already decoded. *)
+    a {!close} invalidates the earlier streams: their next pull raises {!Vcd.Error.E} ([`Superseded] or [`Closed]), even
+    if events were already decoded. *)
 module File : sig
   type t
 
-  val open_ : string -> (t, string) result
-  (** Open an FST file; [Error] carries the message that {!parse_file} would raise with. Raises [Invalid_argument] for a
-      VCD file. *)
+  val open_ : string -> (t, Vcd.Error.error) result
+  (** Open an FST file; [Error] carries what {!parse_file} would raise, with [`Not_fst] for a VCD file. *)
 
   val header : t -> Vcd_ast.header
-  (** The header, built on first use (by this or by {!stream}) and kept. Raises {!Vcd.Parse_error} for a damaged
-      hierarchy or a closed handle. *)
+  (** The header, built on first use (by this or by {!stream}) and kept. Raises {!Vcd.Error.E} for a damaged hierarchy
+      or a closed handle. *)
 
   val stream :
     ?select:(Vcd_types.ID.t -> bool) -> ?at:Vcd_types.Timestamp.t -> t -> Vcd.Stateful.state * Vcd_ast.event Seq.t
   (** Start a stream on the handle, invalidating the previous one. Without [at] it is that of {!parse_file}, with an
       empty state; with [at] it is that of {!open_at}, from the block that [time] falls in. The sequence is single-use
-      as {!Vcd.parse_result}'s is. Raises {!Vcd.Parse_error} as {!parse_file} does. *)
+      as {!Vcd.parse_result}'s is. Raises {!Vcd.Error.E} as {!parse_file} does. *)
 
-  val blocks : t -> ((Vcd_types.Timestamp.t * Vcd_types.Timestamp.t) array, string) result
+  val blocks : t -> ((Vcd_types.Timestamp.t * Vcd_types.Timestamp.t) array, Vcd.Error.error) result
   (** As {!Vcd_fst.blocks}. *)
 
   val close : t -> unit

@@ -111,11 +111,8 @@ let warn_unmatched ~label (u : Vcd_util.unmatched) =
 let with_parsed ?select path f =
   match Vcd_fst.with_file ?select path f with
   | v -> v
-  | exception Vcd.Parse_error msg ->
-      Printf.eprintf "parse error: %s\n" msg;
-      exit 1
-  | exception Sys_error msg ->
-      Printf.eprintf "%s\n" msg;
+  | exception Vcd.Error.E e ->
+      Printf.eprintf "%s\n" (Vcd_util.error_message e);
       exit 1
   | exception Failure msg ->
       Printf.eprintf "error: %s\n" msg;
@@ -257,6 +254,6 @@ let main () =
 (* Value changes are parsed lazily, so their errors surface while iterating. *)
 let () =
   try main ()
-  with Vcd.Parse_error msg ->
-    Printf.eprintf "parse error: %s\n" msg;
+  with Vcd.Error.E e ->
+    Printf.eprintf "%s\n" (Vcd_util.error_message e);
     exit 1

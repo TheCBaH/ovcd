@@ -53,3 +53,7 @@ val in_ranges : Vcd.time_range list -> Vcd_types.Timestamp.t -> bool
 val past_all_ranges : Vcd.time_range list -> Vcd_types.Timestamp.t -> bool
 (** [past_all_ranges ranges t] is [true] when [t] is strictly past every range's [stop]. Early-exit guard. Always
     [false] when [ranges] is empty or any range has no [stop]. *)
+
+val error_message : Vcd.Error.error -> string
+(** The line the tools print for an error: the system message for [`Io], ["parse error: "] and {!Vcd.Error.pp_error}
+    otherwise. *)
