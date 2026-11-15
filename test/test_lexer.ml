@@ -179,3 +179,16 @@ let%expect_test "timezero tokens" =
 let%expect_test "text tokens keep keywords and collapse whitespace" =
   print_string (show_header_tokens "$comment  a $var\n b $end $version $end $enddefinitions");
   [%expect {| COMMENT(a $var b) VERSION() |}]
+
+let%expect_test "all-0/1 vectors lex like binary_value at every width" =
+  let bad = ref [] in
+  for w = 1 to 70 do
+    List.iter
+      (fun bits ->
+        match Vcd_lexer.next_event (Lexing.from_string (Printf.sprintf "b%s !" bits)) with
+        | Some (Change (_, v)) when Vcd_types.Value.to_string v = Vcd_types.Value.to_string (binary_value bits) -> ()
+        | _ -> bad := w :: !bad)
+      [ String.make w '1'; String.make w '0'; String.init w (fun i -> if i land 1 = 0 then '1' else '0') ]
+  done;
+  Printf.printf "mismatches: %d\n" (List.length !bad);
+  [%expect {| mismatches: 0 |}]
