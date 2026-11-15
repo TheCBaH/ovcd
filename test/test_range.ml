@@ -34,3 +34,24 @@ let%expect_test "colon open bounds" =
     2000:     -> 2000.._
     :1000     -> _..1000
     |}]
+
+let%expect_test "malformed specs raise Failure" =
+  List.iter
+    (fun s ->
+      match Vcd_util.parse_range s with
+      | _ -> Printf.printf "%S -> accepted\n" s
+      | exception Failure msg -> Printf.printf "%S -> Failure %s\n" s msg)
+    [ ""; "  "; "abc"; "1-x"; "5-3"; "5:3"; "0x10"; "1_000"; "1:2:3"; "99999999999999999999" ];
+  [%expect
+    {|
+    "" -> Failure empty time range
+    "  " -> Failure empty time range
+    "abc" -> Failure invalid time "abc"
+    "1-x" -> Failure invalid time "x"
+    "5-3" -> Failure start 5 is after stop 3
+    "5:3" -> Failure start 5 is after stop 3
+    "0x10" -> Failure invalid time "0x10"
+    "1_000" -> Failure invalid time "1_000"
+    "1:2:3" -> Failure invalid time "2:3"
+    "99999999999999999999" -> Failure invalid time "99999999999999999999"
+    |}]

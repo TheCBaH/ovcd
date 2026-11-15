@@ -24,7 +24,7 @@ let make_lexbuf_from_string s =
   lexbuf
 
 let make_lexbuf_from_file path =
-  let ic = open_in path in
+  let ic = open_in_bin path in
   let lexbuf = Lexing.from_channel ic in
   lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with Lexing.pos_fname = path };
   (lexbuf, ic)

@@ -26,7 +26,9 @@ module Reference : sig
   val push : string -> t -> t
   val equal : t -> t -> bool
   val compare : t -> t -> int
+
   val make : string list -> string -> t
+  (** [make scopes name] is [of_list (scopes @ [name])]: the name is the innermost component. *)
 
   val to_list : t -> string list
   (** Returns components in outermost-to-innermost (display) order. *)
@@ -52,16 +54,18 @@ module Value : sig
   val char_to_logic_exn : char -> logic
 
   val int_bits : int
-  (** Maximum bit-width stored as a native [int] in the [Int] variant (= 24). *)
+  (** Vectors of at most this many digits (= 24) are always [Int] when all digits are 0/1. *)
 
   (** Decoded value for a bus/vector signal. *)
   type t =
     | Scalar of logic  (** Single-bit value. *)
     | Int of int
-        (** All-0/1 vector that fits in a portable OCaml [int] (<= [int_bits] = 24 bits). Canonical bit width is in
-            {!Vcd_ast.var_decl.size}. *)
+        (** All-0/1 vector whose value fits a non-negative native [int]. Vectors of up to {!int_bits} digits are always
+            [Int]; a wider vector is [Int] when its value is small enough, so the constructor depends on the value and
+            the platform, not on the width. The bit width is in {!Vcd_ast.var_decl.size}. *)
     | Int64 of int64
-        (** All-0/1 vector of 25..64 bits, held as an [int64]. Canonical bit width is in {!Vcd_ast.var_decl.size}. *)
+        (** All-0/1 vector of at most 64 digits whose value does not fit [Int]. The payload is the unsigned bit pattern,
+            so it is negative when the top bit is set. The bit width is in {!Vcd_ast.var_decl.size}. *)
     | Bytes of bytes  (** All-0/1 vector wider than 64 bits, as a big-endian number (leading pad bits zero). *)
     | Scalars of logic list  (** Vector containing at least one bit other than [B0] and [B1]. *)
     | Other of string  (** Unrecognised value, e.g. a ['?'] bit (raw text kept verbatim). *)
@@ -70,11 +74,13 @@ module Value : sig
     | String of string  (** String value from an [s…] record, escapes kept as written. *)
 
   val to_string : t -> string
+  (** The value in VCD form. [Int] and [Int64] print without leading zeros, but [Bytes] prints every bit of its bytes,
+      so a 65-bit vector prints 72 digits: the printers do not know the declared width. *)
 
   val to_string_hex : int -> t -> string
   (** Like [to_string] but prints multi-bit numeric values ([Int], [Int64], [Bytes]) in hexadecimal with [h] prefix,
-      zero-padded to the width implied by [size]. Other values print as with [to_string]. Pass the signal's declared
-      bit-width as [size]. *)
+      zero-padded to the width implied by [size]. [Bytes] print at their byte length whatever [size] is. Other values
+      print as with [to_string]. Pass the signal's declared bit-width as [size]. *)
 
   val pp : Format.formatter -> t -> unit
   val zero : t

@@ -397,3 +397,15 @@ Negative --lookback is rejected:
   $ ./vcd_tool --when 'counter_tb.reset=1' --lookback -1 ../test-data/vcdvcd/counter_tb.vcd 2>&1; echo "exit:$?"
   error: --lookback must be >= 0
   exit:1
+
+Malformed --range specs are usage errors:
+
+  $ ./vcd_tool --range '' ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  error: invalid --range "": empty time range
+  [1]
+  $ ./vcd_tool --range 5-3 ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  error: invalid --range "5-3": start 5 is after stop 3
+  [1]
+  $ ./vcd_tool --range 0x10 ../test-data/pyDigitalWaveTools/tests/example0.vcd
+  error: invalid --range "0x10": invalid time "0x10"
+  [1]

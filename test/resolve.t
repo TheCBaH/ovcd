@@ -661,3 +661,12 @@ List signals as JSON Lines:
   $ ./vcd_dump --list-signals '**.out' --format jsonl ../test-data/vcdvcd/counter_tb.vcd
   {"path":"counter_tb.out","parts":["counter_tb","out"],"scope_types":["module"],"id":"!","width":2,"var_type":"wire","index":"[1:0]"}
   {"path":"counter_tb.top.out","parts":["counter_tb","top","out"],"scope_types":["module","module"],"id":"%","width":2,"var_type":"reg","index":"[1:0]"}
+
+Malformed --range specs are usage errors in vcd_dump too:
+
+  $ ./vcd_dump --range 'abc' ../test-data/vcdvcd/counter_tb.vcd
+  error: invalid --range "abc": invalid time "abc"
+  [1]
+  $ ./vcd_dump --range '9-3' ../test-data/vcdvcd/counter_tb.vcd
+  error: invalid --range "9-3": start 9 is after stop 3
+  [1]

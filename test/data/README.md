@@ -28,3 +28,7 @@ start at the time the previous one ended. `clean.fst` (`a2_clean_z.fst`) has
 blocks that each start at a new time, with a string and a real that keep their
 value across several of them. `test/fst.t` checks that each FST
 parses to its VCD, and that reading can resume at a block boundary.
+
+`badframe.fst` is `kitchen.fst` with the value of its first signal in the second
+block's frame (the first byte of the frame) replaced by `Q`, stored uncompressed;
+`test/test_fst.ml` reads it with `Vcd_fst.open_at`.

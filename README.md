@@ -26,7 +26,7 @@ usage patterns, when to use which, and tradeoffs.
 ```
 make        # build
 make test   # run tests
-make bench  # benchmark on large real-world VCD files (default 10 runs each)
+make benchmark  # benchmark on large real-world VCD files (default 10 runs each)
 ```
 
 Open in GitHub Codespaces: [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=1254661213)

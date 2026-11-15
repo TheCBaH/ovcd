@@ -156,7 +156,8 @@ let events ?select ?(block = 0) t ~error ~ids ~ports =
             if not (Int64.equal time 0L) then new_time time;
             blackout time
           end);
-      bit = (fun h c -> change h (scalar_of_char c));
+      bit =
+        (fun h c -> change h (try scalar_of_char c with Value.InvalidLogicChar _ -> Value.Other (String.make 1 c)));
       vector =
         (fun h s off len ->
           let v = Bytes.sub_string s off len in

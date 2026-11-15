@@ -19,7 +19,12 @@ let glob_match parts str =
         in
         find_from pos
   in
-  glob_match_aux parts 0
+  match parts with
+  | [] -> ns = 0
+  | [ _ ] -> glob_match_aux parts 0
+  | first :: rest ->
+      let flen = String.length first in
+      flen <= ns && String.sub str 0 flen = first && glob_match_aux rest flen
 
 let anchors pat =
   let rec take_lits = function [] -> [] | Literal s :: rest -> s :: take_lits rest | _ -> [] in

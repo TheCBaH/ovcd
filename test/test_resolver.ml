@@ -191,3 +191,8 @@ let%test "random headers equal the old resolver" =
   let st = Random.State.make [| 20261020 |] in
   let rec go i = i = 300 || (compare_resolvers (random_header st) = None && go (i + 1)) in
   go 0
+
+let%expect_test "Reference.make puts the name innermost" =
+  let r = Vcd_types.Reference.make [ "a"; "b" ] "x" in
+  print_endline (Vcd_types.Reference.to_string r);
+  [%expect {| a.b.x |}]
