@@ -9,6 +9,7 @@
   test_filter_parse
   test_errors
   test_fst
+  test_fst_damage
   test_fuzz
   test_header_parser
   test_lifetime
@@ -25,7 +26,9 @@
  (libraries ovcd vcd_filter vcd_fst vcd_signals vcd_util)
  (inline_tests
   (deps
-   (glob_files data/fst2vcd/*)))
+   (glob_files data/fst2vcd/*)
+   (glob_files data/verilator/*.vcd)
+   (glob_files data/malformed/*)))
  (preprocess
   (pps ppx_expect ppx_inline_test)))
 

@@ -32,3 +32,8 @@ parses to its VCD, and that reading can resume at a block boundary.
 `badframe.fst` is `kitchen.fst` with the value of its first signal in the second
 block's frame (the first byte of the frame) replaced by `Q`, stored uncompressed;
 `test/test_fst.ml` reads it with `Vcd_fst.open_at`.
+
+`malformed/*.fst` are libfst's own malformed files (`tests/data/malformed` in
+the vendored libfst, MIT, Copyright (c) 2009-2025 Tony Bybell; the `.hier`
+companions are not copied). `test/test_fst_damage.ml` reads them, truncations
+of `kitchen.fst` and byte-flipped copies through every `Vcd_fst` entry point.
