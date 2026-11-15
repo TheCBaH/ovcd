@@ -33,6 +33,8 @@ FST input is `lib/fst/vcd_fst.ml` (library `ovcd.fst`, on [ocaml-fst](https://gi
 
 Errors are typed (`lib/vcd_error.ml`, exported as `Vcd.Error`): the lexer and grammar raise the internal `Vcd_error.Located` with a position, `Vcd` turns it into `Vcd.Error.E`, and every entry point raises `E` or has a `*_result` variant; `Failure`, `Sys_error` and `Invalid_argument` must not escape (`Vcd_util.parse_range` is the one `Failure` left, a CLI argument parser). The tools print errors with `Vcd_util.error_message`.
 
+`Vcd.Stateful.stream` yields events carrying `kind`: `` `Snapshot`` for the full state reported when a `ranges` interval is entered, `` `Delta`` otherwise. Dump-block values update `state` but never appear in `changes`. A stream with changes but no timestamp yields them at time 0.
+
 The public API is `lib/vcd.ml` / `lib/vcd.mli` and `lib/fst/vcd_fst.mli`. Everything else in `lib/` is internal.
 
 ## Tests

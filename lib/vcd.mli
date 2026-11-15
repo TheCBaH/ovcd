@@ -128,6 +128,10 @@ module Stateful : sig
   val find : state -> Vcd_types.ID.t -> Vcd_types.Value.t option
   (** [find state id] returns the current value of [id] in [state], or [None] if unseen. *)
 
+  type kind = [ `Delta | `Snapshot ]
+  (** [`Delta] is a real change at the event's time. [`Snapshot] is the full state of the effective set, reported when
+      the stream enters a [ranges] interval; it is not a change. *)
+
   type event = {
     state : state;  (** Current values of the effective ID set, as of the end of the previous timestep. *)
     time : Vcd_types.Timestamp.t;
@@ -135,6 +139,7 @@ module Stateful : sig
         (** IDs in the effective set whose values changed at [time]. Outside dump blocks this is the delta. At the first
             timestep inside each [ranges] interval this is a full snapshot of the effective ID set in the current state,
             so that the consumer sees values that changed while the stream was outside the range. *)
+    kind : kind;  (** [`Snapshot] exactly when [changes] is a range-entry snapshot. *)
   }
 
   val stream :
@@ -149,7 +154,8 @@ module Stateful : sig
       The {e effective ID set} is [tracked ∪ reported] when both are given, or whichever is given when only one is, or
       all IDs when neither is. Both [event.state] and [event.changes] are restricted to this set.
 
-      Produces one {!event} per timestep where [event.changes] is non-empty.
+      Produces one {!event} per timestep where [event.changes] is non-empty. A stream with changes but no timestamp
+      yields one event at time 0 with those changes; [state] is then [init].
 
       @param init
         The state before the first event, for a stream that starts after the beginning of the simulation (see

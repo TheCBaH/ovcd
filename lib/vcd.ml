@@ -334,7 +334,8 @@ module Stateful = struct
 
   let find state id = ID_map.find_opt id state
 
-  type event = { state : state; time : Vcd_types.Timestamp.t; changes : state }
+  type kind = [ `Delta | `Snapshot ]
+  type event = { state : state; time : Vcd_types.Timestamp.t; changes : state; kind : kind }
 
   let stream ?tracked ?reported ?(init : state = ID_map.empty) ?(ranges : time_range list = []) events =
     let ids =
@@ -366,18 +367,24 @@ module Stateful = struct
       else
         let new_state, filtered, term = collect false state ID_map.empty events in
         let in_range = in_ranges ranges t in
-        let effective_changes = if in_range && (not was_in_range) && ranges <> [] then new_state else filtered in
+        let snapshot = in_range && (not was_in_range) && ranges <> [] in
+        let kind = if snapshot then `Snapshot else `Delta in
+        let effective_changes = if snapshot then new_state else filtered in
         let emit = in_range && not (ID_map.is_empty effective_changes) in
         match term with
         | `Nil ->
-            if emit then Seq.Cons ({ state; time = t; changes = effective_changes }, Fun.const Seq.Nil) else Seq.Nil
+            if emit then Seq.Cons ({ state; time = t; changes = effective_changes; kind }, Fun.const Seq.Nil)
+            else Seq.Nil
         | `Timestamp (next_t, remaining) ->
             if emit then
-              Seq.Cons ({ state; time = t; changes = effective_changes }, loop in_range new_state next_t remaining)
+              Seq.Cons ({ state; time = t; changes = effective_changes; kind }, loop in_range new_state next_t remaining)
             else loop in_range new_state next_t remaining ()
     in
     match collect false (ID_map.filter (fun id _ -> in_ids id) init) ID_map.empty events with
-    | _, _, `Nil -> Fun.const Seq.Nil
+    | _, changes, `Nil ->
+        let time = Vcd_types.Timestamp.of_int64 0L in
+        if ID_map.is_empty changes || not (in_ranges ranges time) then Fun.const Seq.Nil
+        else Seq.return { state = ID_map.filter (fun id _ -> in_ids id) init; time; changes; kind = `Delta }
     | pre_state, _, `Timestamp (first_t, first_events) -> loop false pre_state first_t first_events
 end
 
