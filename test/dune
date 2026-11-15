@@ -5,6 +5,7 @@
   test_binary_value
   test_filter_match
   test_filter_parse
+  test_fst
   test_header_parser
   test_lexer
   test_packed
@@ -16,8 +17,10 @@
   test_strict
   test_value
   test_vcd)
- (libraries ovcd vcd_filter vcd_signals vcd_util)
- (inline_tests)
+ (libraries ovcd vcd_filter vcd_fst vcd_signals vcd_util)
+ (inline_tests
+  (deps
+   (glob_files data/fst2vcd/*)))
  (preprocess
   (pps ppx_expect ppx_inline_test)))
 
