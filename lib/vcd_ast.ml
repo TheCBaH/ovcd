@@ -136,7 +136,7 @@ let bit s i =
   let d = Char.code s.[i] - 48 in
   if d lor 1 <> 1 then raise_notrace Not_binary else d
 
-(* The digits [i, j) as a native int; [j - i] must not exceed 62. *)
+(* The digits [i, j) as a native int; [j - i] must not exceed 30, so that a 31-bit int does not overflow. *)
 let bits_int s i j =
   let acc = ref 0 in
   for k = i to j - 1 do
@@ -154,9 +154,13 @@ let binary_value s =
     try
       if n <= Value.int_bits then Value.int (bits_int s 0 n)
       else if n <= 64 then begin
-        let split = max 0 (n - 32) in
-        let hi = bits_int s 0 split and lo = bits_int s split n in
-        Value.int64 (Int64.logor (Int64.shift_left (Int64.of_int hi) 32) (Int64.of_int lo))
+        let acc = ref 0L and i = ref 0 in
+        while !i < n do
+          let j = min n (!i + Value.int_bits) in
+          acc := Int64.logor (Int64.shift_left !acc (j - !i)) (Int64.of_int (bits_int s !i j));
+          i := j
+        done;
+        Value.int64 !acc
       end
       else begin
         for i = 0 to n - 1 do
