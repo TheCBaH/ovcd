@@ -299,3 +299,18 @@ let%expect_test "name_pattern: combined with other segments" =
     **.co* => Test_MIPS.core
     **.co* !> Test_MIPS.cpu
   |}]
+
+let%expect_test "name_pattern: first part is anchored at the start" =
+  check "ba*" "xba";
+  check "ba*" "xbar";
+  check "b*r" "abr";
+  check "Test_MIPS.co*.pc" "Test_MIPS.disco.pc";
+  check "b*a*" "xba";
+  [%expect
+    {|
+    ba* !> xba
+    ba* !> xbar
+    b*r !> abr
+    Test_MIPS.co*.pc !> Test_MIPS.disco.pc
+    b*a* !> xba
+  |}]
