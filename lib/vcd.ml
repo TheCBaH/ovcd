@@ -128,9 +128,24 @@ let parse_channel ?select ?(strict = false) ic =
     parse_lexbuf ?select ~last_byte:(fun () -> !last) lexbuf
   end
 
+(* Closes [ic] when [seq] ends or raises. *)
+let rec closing ic seq () =
+  match seq () with
+  | Seq.Nil ->
+      close_in_noerr ic;
+      Seq.Nil
+  | Seq.Cons (e, rest) -> Seq.Cons (e, closing ic rest)
+  | exception ex ->
+      close_in_noerr ic;
+      raise ex
+
 let parse_file ?select path =
-  let lexbuf, _ic = make_lexbuf_from_file path in
-  parse_lexbuf ?select lexbuf
+  let lexbuf, ic = make_lexbuf_from_file path in
+  match parse_lexbuf ?select lexbuf with
+  | r -> { r with simulation = closing ic r.simulation }
+  | exception ex ->
+      close_in_noerr ic;
+      raise ex
 
 (* ------------------------------------------------------------------ *)
 (*  Shared key-indexed containers                                     *)
