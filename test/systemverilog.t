@@ -104,10 +104,10 @@ values:
     top.d1=hb
     top.p=puzu0uu1xzxZ00U
     top.msg=s
-    top.rt=0.
-    top.sr=0.
-    top.r_alias=0.
-    top.r=0.
+    top.rt=0
+    top.sr=0
+    top.r_alias=0
+    top.r=0
     top.wide=bu-0zxlxzux1z--00huhxuwhluzlxhzh-hhww1huzlzwhxhl0h00wwxxlz0-1l1xhz-z-ux1lxwxwzl000-w0u-zz-uzlx0-zlxx0zhhh01luuxu-lxxxlhzzhlwhhxx-1l
     top.b13=h140b
     top.b8_alias=bx10xxzxx

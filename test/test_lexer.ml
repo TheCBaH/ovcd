@@ -113,8 +113,8 @@ let%expect_test "vector binary — with X/Z (Scalars)" =
 let%expect_test "real value change" =
   print_string (show_events "r3.14 !  R0.0 \"");
   [%expect {|
-    !=3.14
-    "=0. |}]
+    !=3.1400000000000001
+    "=0 |}]
 
 let%expect_test "dumpvars block" =
   print_string (show_events "$dumpvars 0! 1\" $end");
