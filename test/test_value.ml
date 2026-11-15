@@ -293,3 +293,19 @@ let%expect_test "to_string of port and string values" =
     pUDN0
     sa\040b
     pUDN0 |}]
+
+let%expect_test "to_string: unsigned Int64" =
+  let p v = print_endline (Value.to_string v) in
+  p (Int64 0L);
+  p (Int64 Int64.min_int);
+  p (Int64 (-1L));
+  p (Vcd_ast.binary_value (String.make 64 '1'));
+  p (Vcd_ast.binary_value ("1" ^ String.make 63 '0'));
+  [%expect
+    {|
+    b0
+    b1000000000000000000000000000000000000000000000000000000000000000
+    b1111111111111111111111111111111111111111111111111111111111111111
+    b1111111111111111111111111111111111111111111111111111111111111111
+    b1000000000000000000000000000000000000000000000000000000000000000
+  |}]

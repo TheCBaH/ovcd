@@ -100,7 +100,7 @@ module Value = struct
         let buf = Buffer.create 66 in
         Buffer.add_char buf 'b';
         let rec go n =
-          if n > Int64.zero then begin
+          if not (Int64.equal n Int64.zero) then begin
             go (Int64.shift_right_logical n 1);
             Buffer.add_char buf (if Int64.logand n 1L = 1L then '1' else '0')
           end
