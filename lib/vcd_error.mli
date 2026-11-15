@@ -15,7 +15,10 @@ type error =
   | `Not_fst of string  (** An FST-only function was given a VCD file, named by path. *)
   | `Closed of string  (** A pull from a stream of a closed [Vcd_fst.File] handle, named by path. *)
   | `Superseded of string
-    (** A pull from a stream that a later [Vcd_fst.File.stream] or [Vcd_fst.File.close] invalidated. *) ]
+    (** A pull from a stream that a later [Vcd_fst.File.stream] or [Vcd_fst.File.close] invalidated. *)
+  | `Encoding of string
+    (** [Vcd_signals.to_line] was given a signal with a field that is not valid UTF-8; the message names the signal. *)
+  ]
 
 val pp_error : Format.formatter -> error -> unit
 (** One line, without a trailing newline: for a positioned error, ["<message> at <file> line <n> col <c>"]. *)

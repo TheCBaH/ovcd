@@ -133,3 +133,12 @@ use --summary to avoid 392-line scope tree:
   timescale: 1fs
   scopes:    17  vars: 367
   events:    1236307 (timestamps: 400075, changes: 836231, dumps: 1, comments: 0)
+
+A name that is not valid UTF-8 cannot be written as JSON; the listing stops at
+it with an error naming the signal, and valid UTF-8 passes through:
+
+  $ printf '$scope module top $end\n$var wire 1 ! caf\303\251 $end\n$var wire 1 " caf\351 $end\n$upscope $end\n$enddefinitions $end\n' > names.vcd
+  $ ./vcd_dump --list-signals '**' --format jsonl names.vcd
+  {"path":"top.café","parts":["top","café"],"scope_types":["module"],"id":"!","width":1,"var_type":"wire"}
+  error: signal "top.caf\233": name is not valid UTF-8
+  [1]

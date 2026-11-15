@@ -21,12 +21,13 @@ val jsont : t Jsont.t
 (** The JSON object codec: an encoder and a decoder. [index] is left out when absent. *)
 
 val to_line : t -> string
-(** Minified JSON, without the newline. *)
+(** Minified JSON, without the newline. Raises {!Vcd.Error.E} [`Encoding] when a field is not valid UTF-8 (JSON cannot
+    carry the raw bytes, and a lossy escape would merge distinct names); valid UTF-8 round-trips exactly. *)
 
 val of_line : string -> (t, string) result
 
 val write : out_channel -> t Seq.t -> unit
-(** One {!to_line} per signal, each followed by a newline. *)
+(** One {!to_line} per signal, each followed by a newline; raises as {!to_line}, after the lines before it. *)
 
 val read : in_channel -> (t, string) result Seq.t
 (** Lazily decodes the lines of a channel, skipping empty ones. A malformed line is an [Error] element and does not end
