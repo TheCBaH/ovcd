@@ -104,6 +104,19 @@ let correlate resolver strip_map ~when_specs ~show_filter ~lookback events =
       end)
     events
 
+let with_parsed path f =
+  match Vcd_fst.with_file path f with
+  | v -> v
+  | exception Vcd.Parse_error msg ->
+      Printf.eprintf "parse error: %s\n" msg;
+      exit 1
+  | exception Sys_error msg ->
+      Printf.eprintf "%s\n" msg;
+      exit 1
+  | exception Failure msg ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+
 let main () =
   let ranges = ref [] in
   let patterns = ref [] in
@@ -192,19 +205,7 @@ let main () =
     exit 1);
   List.iter
     (fun path ->
-      let result =
-        match Vcd_fst.open_file path with
-        | r -> r
-        | exception Vcd.Parse_error msg ->
-            Printf.eprintf "parse error: %s\n" msg;
-            exit 1
-        | exception Sys_error msg ->
-            Printf.eprintf "%s\n" msg;
-            exit 1
-        | exception Failure msg ->
-            Printf.eprintf "error: %s\n" msg;
-            exit 1
-      in
+      with_parsed path @@ fun result ->
       let resolver = Vcd.Resolver.make result.header in
       if when_specs <> [] then begin
         let show_filter = Vcd_util.build_filter ~pattern_label:"--show" resolver show_patterns [] in

@@ -40,6 +40,9 @@ val open_string : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 val open_file : ?select:(Vcd_types.ID.t -> bool) -> string -> Vcd.parse_result
 (** {!parse_file} or {!Vcd.parse_file}, as {!detect_file} decides. *)
 
+val with_file : ?select:(Vcd_types.ID.t -> bool) -> string -> (Vcd.parse_result -> 'a) -> 'a
+(** {!Vcd.with_file} for a VCD or an FST, as {!detect_file} decides: the file is closed when [f] returns or raises. *)
+
 val blocks : string -> (Vcd_types.Timestamp.t * Vcd_types.Timestamp.t) array
 (** The start and end times of an FST file's value change blocks, read from their headers alone. Raises as {!parse_file}
     does, and [Invalid_argument] for a VCD file. *)

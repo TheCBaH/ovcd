@@ -196,7 +196,7 @@ let events ?select ?(block = 0) t ~error ~ids ~ports =
         end;
       (!state, Seq.once next)
 
-let parse ?select ~name opened =
+let parse_t ?select ~name opened =
   let error e = Vcd.Parse_error (Printf.sprintf "%s: %s" name (Fst.Error.to_string e)) in
   match opened with
   | Error e when Fst.Error.kind e = Fst.Error.Io -> raise (Sys_error (Fst.Error.message e))
@@ -208,8 +208,9 @@ let parse ?select ~name opened =
       in
       match definitions t with
       | Error e -> raise (error e)
-      | Ok (header, ids, ports) -> { Vcd.header; simulation = snd (events ?select t ~error ~ids ~ports) })
+      | Ok (header, ids, ports) -> (t, { Vcd.header; simulation = snd (events ?select t ~error ~ids ~ports) }))
 
+let parse ?select ~name opened = snd (parse_t ?select ~name opened)
 let parse_string ?select s = parse ?select ~name:"<string>" (Fst.of_string s)
 let parse_file ?select path = parse ?select ~name:path (Fst.open_file path)
 
@@ -218,6 +219,13 @@ let open_string ?select s =
 
 let open_file ?select path =
   match detect_file path with `Fst -> parse_file ?select path | `Vcd -> Vcd.parse_file ?select path
+
+let with_file ?select path f =
+  match detect_file path with
+  | `Vcd -> Vcd.with_file ?select path f
+  | `Fst ->
+      let t, r = parse_t ?select ~name:path (Fst.open_file path) in
+      Fun.protect ~finally:(fun () -> Fst.close t) (fun () -> f r)
 
 (* An FST opened for [fn]; raises as [parse] does, and [Invalid_argument] for a VCD. *)
 let with_fst ~fn path f =

@@ -39,7 +39,12 @@ val parse_channel : ?select:(Vcd_types.ID.t -> bool) -> ?strict:bool -> in_chann
 
 val parse_file : ?select:(Vcd_types.ID.t -> bool) -> string -> parse_result
 (** Parse a VCD file by path. The simulation [Seq.t] is lazy; the file is closed when the sequence ends or raises, and
-    on a header error. A caller that stops early leaves it open. [select] is as in {!parse_string}. *)
+    on a header error. A caller that stops early leaves it open: see {!with_file}. [select] is as in {!parse_string}. *)
+
+val with_file : ?select:(Vcd_types.ID.t -> bool) -> string -> (parse_result -> 'a) -> 'a
+(** [with_file path f] parses a VCD file and applies [f] to the result, closing the file when [f] returns or raises. The
+    simulation must not be used after [f] returns. [select] is as in {!parse_string}. Prefer it to {!parse_file} when
+    the simulation may not be read to its end. *)
 
 module ID_map : Map.S with type key = Vcd_types.ID.t
 (** Map keyed on signal identifiers. *)

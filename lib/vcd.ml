@@ -147,6 +147,10 @@ let parse_file ?select path =
       close_in_noerr ic;
       raise ex
 
+let with_file ?select path f =
+  let lexbuf, ic = make_lexbuf_from_file path in
+  Fun.protect ~finally:(fun () -> close_in_noerr ic) (fun () -> f (parse_lexbuf ?select lexbuf))
+
 (* ------------------------------------------------------------------ *)
 (*  Shared key-indexed containers                                     *)
 (* ------------------------------------------------------------------ *)

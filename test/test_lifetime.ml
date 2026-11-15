@@ -51,3 +51,27 @@ let%expect_test "a second traversal raises" =
     string: Forced_twice
     file: Forced_twice
     fst: Forced_twice |}]
+
+let fst_path = "data/fst2vcd/clean.fst"
+let first_event (r : Vcd.parse_result) = match r.simulation () with Seq.Cons (e, _) -> Some e | Nil -> None
+
+let%expect_test "with_file closes after an early stop" =
+  with_temp vcd (fun path ->
+      Printf.printf "vcd %b\n" (leaked (fun () -> Vcd_fst.with_file path (fun r -> ignore (first_event r))) < 10));
+  Printf.printf "fst %b\n" (leaked (fun () -> Vcd_fst.with_file fst_path (fun r -> ignore (first_event r))) < 10);
+  [%expect {|
+    vcd true
+    fst true |}]
+
+let%expect_test "with_file closes when the callback raises" =
+  let boom f = try f () with Exit -> () in
+  with_temp vcd (fun path ->
+      Printf.printf "vcd %b\n" (leaked (fun () -> boom (fun () -> Vcd_fst.with_file path (fun _ -> raise Exit))) < 10));
+  Printf.printf "fst %b\n" (leaked (fun () -> boom (fun () -> Vcd_fst.with_file fst_path (fun _ -> raise Exit))) < 10);
+  [%expect {|
+    vcd true
+    fst true |}]
+
+let%expect_test "with_file returns the callback's result" =
+  with_temp vcd (fun path -> Printf.printf "%d\n" (Vcd.with_file path (fun r -> Seq.length r.simulation)));
+  [%expect {| 4 |}]

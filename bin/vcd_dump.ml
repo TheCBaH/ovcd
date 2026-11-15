@@ -25,6 +25,19 @@ let parse_pattern_or_exit r s =
       exit 1
   | Ok pat -> r := (s, pat) :: !r
 
+let with_parsed path f =
+  match Vcd_fst.with_file path f with
+  | v -> v
+  | exception Vcd.Parse_error msg ->
+      Printf.eprintf "parse error: %s\n" msg;
+      exit 1
+  | exception Sys_error msg ->
+      Printf.eprintf "%s\n" msg;
+      exit 1
+  | exception Failure msg ->
+      Printf.eprintf "error: %s\n" msg;
+      exit 1
+
 let main () =
   let summary = ref false in
   let bench_runs = ref 0 in
@@ -98,24 +111,12 @@ let main () =
     exit 1);
   List.iter
     (fun path ->
-      let parse () =
-        match Vcd_fst.open_file path with
-        | r -> r
-        | exception Vcd.Parse_error msg ->
-            Printf.eprintf "parse error: %s\n" msg;
-            exit 1
-        | exception Sys_error msg ->
-            Printf.eprintf "%s\n" msg;
-            exit 1
-        | exception Failure msg ->
-            Printf.eprintf "error: %s\n" msg;
-            exit 1
-      in
       if list_signals <> [] then begin
         (* Header-only query: print every matched signal's path, ID code and width.
            Reuses the filter machinery so unmatched patterns warn on stderr and only
            the references that actually matched are listed (not unselected aliases). *)
-        let h = (parse ()).header in
+        with_parsed path @@ fun parsed ->
+        let h = parsed.header in
         let resolver = Vcd.Resolver.make h in
         let filter = Vcd_util.build_filter ~pattern_label:"--list-signals" resolver list_signals [] in
         let strip_map = if !strip then Vcd_util.build_strip_map resolver filter else None in
@@ -145,7 +146,7 @@ let main () =
       end
       else if !bench_runs > 0 then begin
         for _ = 1 to !bench_runs do
-          let r = parse () in
+          with_parsed path @@ fun r ->
           if !resolve then begin
             let resolver = Vcd.Resolver.make r.header in
             let filter = Vcd_util.build_filter resolver patterns regexes in
@@ -155,7 +156,7 @@ let main () =
         done
       end
       else begin
-        let result = parse () in
+        with_parsed path @@ fun result ->
         let h = result.header in
         if !resolve then begin
           let resolver = Vcd.Resolver.make h in
