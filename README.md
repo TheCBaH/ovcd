@@ -14,7 +14,9 @@ FST files are read natively too, through
 [ocaml-fst](https://github.com/TheCBaH/ocaml-fst): `Vcd_fst.open_file`
 (library `ovcd.fst`) tells FST from VCD by content and returns the same
 header and lazy event stream as `fst2vcd -e` followed by `Vcd.parse_file`,
-decoding one FST block at a time. Both tools accept either format. ovcd is stricter than GTKWave on damaged
+decoding one FST block at a time. The event stream can be traversed once;
+`Vcd.with_file` and `Vcd_fst.with_file` close the file on return or
+exception. Both tools accept either format. ovcd is stricter than GTKWave on damaged
 FST files: damaged chain tables and invalid time-table trailers are errors
 here, where GTKWave skips the block.
 
