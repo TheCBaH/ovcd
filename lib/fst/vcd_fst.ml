@@ -42,11 +42,11 @@ type open_scope = {
 
 let close_scope o = { s_type = o.st; s_name = o.name; vars = List.rev o.o_vars; children = List.rev o.o_children }
 
-(* The header, and for each handle (index [handle - 1]) its ID and whether it is a port. *)
+(* The header, and the ID of each handle (index [handle - 1]). *)
 let definitions t =
   let h = Fst.header t in
   let stack = ref [] and top = ref [] and comment = ref None in
-  let ids = ref [] and ports = ref [] in
+  let ids = ref [] in
   let add_scope s = match !stack with o :: _ -> o.o_children <- s :: o.o_children | [] -> top := s :: !top in
   let entry () = function
     | Fst.Hier.Scope { scope_type; name; _ } ->
@@ -64,10 +64,7 @@ let definitions t =
     | Var { var_type; name; length; handle; alias; _ } -> (
         let id = Vcd_types.ID.of_string (Fst.Vcd.id handle) in
         let kw = Fst.Hier.var_type_name var_type in
-        if not alias then begin
-          ids := id :: !ids;
-          ports := (kw = Some "port") :: !ports
-        end;
+        if not alias then ids := id :: !ids;
         let v_type = match kw with Some kw -> var_type_of_keyword kw | None -> Other_type (string_of_int var_type) in
         let r, index =
           match words name with
@@ -100,100 +97,63 @@ let definitions t =
           scopes = List.rev !top;
         }
       in
-      let arr l = Array.of_list (List.rev l) in
-      Ok (header, arr !ids, arr !ports)
+      Ok (header, Array.of_list (List.rev !ids))
 
-(* Events in the order, and with the [$dumpvars] and [$dumpon]/[$dumpoff] placement, of fst2vcd's output. *)
-let events ?select ?(block = 0) t ~error ~ids ~ports =
+let events ?select ?(block = 0) t ~error ~ids =
   let resume = block > 0 in
   let q = Queue.create () in
   let push e = Queue.push e q in
   let id h = if h >= 1 && h <= Array.length ids then ids.(h - 1) else Vcd_types.ID.of_string (Fst.Vcd.id h) in
-  let port h = h >= 1 && h <= Array.length ports && ports.(h - 1) in
   (* A resumed stream has no [$dumpvars]: the frame's values go to [state] instead of the queue. *)
-  let dumpvars = ref (if resume then 2 else 0) in
-  let in_frame = ref false and state = ref Vcd.ID_map.empty and first_time = ref resume in
+  let in_frame = ref false and state = ref Vcd.ID_map.empty in
   let change h v = if !in_frame then state := Vcd.ID_map.add (id h) v !state else push (Change (id h, v)) in
-  let blackouts = Array.of_list (Fst.blackouts t) and cur = ref 0 in
-  let new_time time =
-    if !dumpvars = 1 then begin
-      push DumpEnd;
-      dumpvars := 2
-    end;
-    push (Timestamp (Vcd_types.Timestamp.of_int64 time));
-    if !dumpvars = 0 then begin
-      push (DumpStart "dumpvars");
-      dumpvars := 1
-    end
-  in
-  let blackout time =
-    if !cur < Array.length blackouts then begin
-      let bt, on = blackouts.(!cur) in
-      if Int64.equal bt time then begin
-        push (DumpStart (if on then "dumpon" else "dumpoff"));
-        push DumpEnd;
-        incr cur
-      end
-    end
-  in
   let sink =
     {
-      Fst.time =
+      Fst.Vcd.ignore_sink with
+      time =
         (fun time ->
           in_frame := false;
-          if !first_time then begin
-            first_time := false;
-            while !cur < Array.length blackouts && Int64.compare (fst blackouts.(!cur)) time < 0 do
-              incr cur
-            done
-          end;
-          new_time time;
-          blackout time);
-      frame =
-        (fun time ->
-          if resume then in_frame := true
-          else begin
-            if not (Int64.equal time 0L) then new_time time;
-            blackout time
-          end);
+          push (Timestamp (Vcd_types.Timestamp.of_int64 time)));
+      frame = (fun _ -> in_frame := true);
+      dump =
+        (function
+        | Fst.Vcd.Dumpvars -> push (DumpStart "dumpvars")
+        | Dumpvars_end -> push DumpEnd
+        | Dumpon ->
+            push (DumpStart "dumpon");
+            push DumpEnd
+        | Dumpoff ->
+            push (DumpStart "dumpoff");
+            push DumpEnd);
       bit =
         (fun h c -> change h (try scalar_of_char c with Value.InvalidLogicChar _ -> Value.Other (String.make 1 c)));
-      vector =
-        (fun h s off len ->
-          let v = Bytes.sub_string s off len in
-          change h (if port h then Value.Port v else binary_value v));
+      vector = (fun h s off len -> change h (binary_value (Bytes.sub_string s off len)));
+      packed = Some (fun h b off width -> change h (packed_value b off width));
+      port = (fun h s off len -> change h (Value.Port (Bytes.sub_string s off len)));
       real = (fun h d -> change h (Value.Real d));
       varlen = (fun h s off len -> change h (Value.String (Fst.Vcd.escape s off len)));
     }
   in
-  let packed h b off width =
-    change h
-      (if port h then
-         Value.Port
-           (String.init width (fun j ->
-                if (Char.code (Bytes.get b (off + (j lsr 3))) lsr (7 - (j land 7))) land 1 = 1 then '1' else '0'))
-       else packed_value b off width)
-  in
   let select = Option.map (fun f h -> f (id h)) select in
-  match if resume then Fst.reader_at ?select ~packed t sink ~block else Fst.reader ?select ~packed t sink with
+  match Fst.Vcd.reader ?select ~block t sink with
   | Error e -> raise (error e)
   | Ok r ->
       let rec next () =
         match Queue.take_opt q with
         | Some e -> Seq.Cons (e, next)
         | None -> (
-            match Fst.step r with
+            match Fst.Vcd.step r with
             | Ok true -> next ()
             | Ok false ->
                 Fst.close t;
                 Seq.Nil
             | Error e -> raise (error e))
       in
-      (* A resumed stream's state is complete once the first block's frame and its first [time] have been
-         delivered, so that step is taken now. *)
-      if resume then
-        begin match Fst.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e)
-        end;
+      (* The first step passes the definitions. A resumed stream's state is complete once the first block's frame
+         and its first [time] have been delivered, so the second step is taken now. *)
+      let step () = match Fst.Vcd.step r with Ok true -> () | Ok false -> Fst.close t | Error e -> raise (error e) in
+      step ();
+      if resume then step ();
       (!state, Seq.once next)
 
 let parse_t ?select ~name opened =
@@ -208,7 +168,7 @@ let parse_t ?select ~name opened =
       in
       match definitions t with
       | Error e -> raise (error e)
-      | Ok (header, ids, ports) -> (t, { Vcd.header; simulation = snd (events ?select t ~error ~ids ~ports) }))
+      | Ok (header, ids) -> (t, { Vcd.header; simulation = snd (events ?select t ~error ~ids) }))
 
 let parse ?select ~name opened = snd (parse_t ?select ~name opened)
 let parse_string ?select s = parse ?select ~name:"<string>" (Fst.of_string s)
@@ -256,7 +216,7 @@ let open_at ?select path ~time =
   with_fst ~fn:"Vcd_fst.open_at" path (fun t error ->
       match definitions t with
       | Error e -> raise (error e)
-      | Ok (header, ids, ports) ->
+      | Ok (header, ids) ->
           let time = Vcd_types.Timestamp.to_int64 time in
           let block =
             match Fst.blocks t with
@@ -267,5 +227,5 @@ let open_at ?select path ~time =
                 Array.iteri (fun i (b : Fst.block) -> if Int64.compare b.start_time time <= 0 then k := i) bs;
                 match Fst.aligned_block t !k with Ok j -> j | Error e -> raise (error e))
           in
-          let state, simulation = events ?select ~block t ~error ~ids ~ports in
+          let state, simulation = events ?select ~block t ~error ~ids in
           (state, { Vcd.header; simulation }))
