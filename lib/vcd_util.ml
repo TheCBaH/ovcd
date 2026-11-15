@@ -87,7 +87,17 @@ let build_strip_map resolver filter =
 let parse_range s : Vcd.time_range =
   let ts_of str =
     let str = String.trim str in
-    if str = "" then None else Some (Vcd_types.Timestamp.of_string str)
+    if str = "" then None
+    else
+      match Int64.of_string_opt str with
+      | Some t when String.for_all (fun c -> c >= '0' && c <= '9') str -> Some (Vcd_types.Timestamp.of_int64 t)
+      | _ -> failwith (Printf.sprintf "invalid time %S" str)
+  in
+  let checked (r : Vcd.time_range) =
+    match (r.start, r.stop) with
+    | Some a, Some b when Vcd_types.Timestamp.compare a b > 0 ->
+        failwith (Format.asprintf "start %a is after stop %a" Vcd_types.Timestamp.pp a Vcd_types.Timestamp.pp b)
+    | _ -> r
   in
   let starts_with2 s = String.length s >= 2 && s.[0] = '.' && s.[1] = '.' in
   let ends_with2 s =
@@ -110,6 +120,9 @@ let parse_range s : Vcd.time_range =
     String.sub s 0 !i
   in
   let s = String.trim s in
+  if s = "" then failwith "empty time range";
+  checked
+  @@
   if starts_with2 s then
     let rest = String.trim (strip_leading_dots s) in
     let rest =

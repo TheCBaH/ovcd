@@ -46,7 +46,8 @@ val parse_range : string -> Vcd.time_range
     - ["N"] — point range [[N, N]]
     - ["..."] or [".."] — all time
 
-    Raises [Failure] on invalid input. *)
+    Bounds are decimal digits only. Raises [Failure] with a readable message for an empty spec, a bound that is not a
+    decimal number, and a start after the stop. *)
 
 val in_ranges : Vcd.time_range list -> Vcd_types.Timestamp.t -> bool
 (** [in_ranges ranges t] is [true] when [t] falls inside at least one range, or when [ranges] is empty (all time). *)
