@@ -196,3 +196,34 @@ let%expect_test "Reference.make puts the name innermost" =
   let r = Vcd_types.Reference.make [ "a"; "b" ] "x" in
   print_endline (Vcd_types.Reference.to_string r);
   [%expect {| a.b.x |}]
+
+let ivar ?(size = 1) id ref index : Vcd_ast.var_decl =
+  { v_type = Vcd_ast.Wire; size; id = ID.of_string id; ref; index = Some index }
+
+let ids l = List.map ID.to_string l
+
+let%test "find_ids returns every ID declared at a path, in declaration order" =
+  let h = header [ scope "top" [ ivar "p" "d" "[0]"; ivar "q" "d" "[1]"; ivar "p" "d" "[0]"; var "r" "e" ] [] ] in
+  let n = Vcd.Resolver.make h in
+  let d = Reference.of_list [ "top"; "d" ] in
+  ids (Vcd.Resolver.find_ids n d) = [ "q"; "p" ]
+  && Vcd.Resolver.find_id n d = Some (ID.of_string "p")
+  && ids (Vcd.Resolver.find_ids n (Reference.of_list [ "top"; "e" ])) = [ "r" ]
+  && Vcd.Resolver.find_ids n (Reference.of_list [ "top"; "nope" ]) = []
+  && compare_resolvers h = None
+
+let%test "display_name appends the index only when the path is ambiguous" =
+  let h =
+    header
+      [
+        scope "top"
+          [ ivar ~size:4 "p" "data" "[7:4]"; ivar ~size:4 "q" "data" "[3:0]"; ivar "r" "e" "[0]"; var "s" "f" ]
+          [];
+      ]
+  in
+  let n = Vcd.Resolver.make h in
+  let name id path = Vcd.Resolver.display_name n (ID.of_string id) (Reference.of_list ("top" :: path)) in
+  name "p" [ "data" ] = "top.data[7:4]"
+  && name "q" [ "data" ] = "top.data[3:0]"
+  && name "r" [ "e" ] = "top.e"
+  && name "s" [ "f" ] = "top.f"

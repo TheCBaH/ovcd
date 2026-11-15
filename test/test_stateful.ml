@@ -8,7 +8,7 @@ open Vcd.Stateful
 let pp_map m = Vcd.ID_map.iter (fun id v -> Format.printf " %a=%a" ID.pp id Value.pp v) m
 
 let pp_event ev =
-  Format.printf "t=%a\n" Timestamp.pp ev.time;
+  Format.printf "t=%a%s\n" Timestamp.pp ev.time (match ev.kind with `Delta -> "" | `Snapshot -> " snapshot");
   Format.printf "  state:";
   pp_map ev.state;
   Format.printf "\n  changes:";
@@ -210,7 +210,7 @@ let%expect_test "single range with start — state tracks all prior changes" =
   Seq.iter pp_event (stream ~ranges:[ range ~start:(ts "2") () ] (stream_of counter_vcd));
   [%expect
     {|
-    t=2
+    t=2 snapshot
       state: !=bx "=0 #=0 $=1 %=bx
       changes: !=b0 "=1 #=0 $=1 %=b0
     t=3
@@ -224,7 +224,7 @@ let%expect_test "single range with stop — snapshot at t=0 then delta; stops af
   Seq.iter pp_event (stream ~ranges:[ range ~stop:(ts "1") () ] (stream_of counter_vcd));
   [%expect
     {|
-    t=0
+    t=0 snapshot
       state:
       changes: !=bx "=1 #=0 $=0 %=bx
     t=1
@@ -238,7 +238,7 @@ let%expect_test "single range with start and stop — snapshot at entry, delta a
   Seq.iter pp_event (stream ~ranges:[ range ~start:(ts "1") ~stop:(ts "2") () ] (stream_of counter_vcd));
   [%expect
     {|
-    t=1
+    t=1 snapshot
       state: !=bx "=1 #=0 $=0 %=bx
       changes: !=bx "=0 #=0 $=1 %=bx
     t=2
@@ -254,13 +254,13 @@ let%expect_test "multiple ranges — snapshot at each range entry" =
   Seq.iter pp_event (stream ~ranges:[ range ~stop:(ts "1") (); range ~start:(ts "3") () ] (stream_of counter_vcd));
   [%expect
     {|
-    t=0
+    t=0 snapshot
       state:
       changes: !=bx "=1 #=0 $=0 %=bx
     t=1
       state: !=bx "=1 #=0 $=0 %=bx
       changes: "=0 $=1
-    t=3
+    t=3 snapshot
       state: !=b0 "=1 #=0 $=1 %=b0
       changes: !=b0 "=0 #=0 $=0 %=b0 |}]
 
@@ -425,7 +425,7 @@ let%expect_test "init — a range entry's snapshot holds only the effective set"
   Seq.iter pp_event
     (stream ~init:init_map ~tracked:(id_set [ "!" ]) ~ranges:[ range ~start:(ts "10") () ] (stream_of resumed_vcd));
   [%expect {|
-    t=10
+    t=10 snapshot
       state: !=1
       changes: !=0 |}]
 
@@ -453,3 +453,24 @@ let%test "stream of a selected parse = tracked stream of the full parse, for eve
           sub = [] || show selected = show tracked)
         subsets)
     [ counter_vcd; dumpall_vcd ]
+
+(* ------------------------------------------------------------------ *)
+(*  No timestamp                                                        *)
+(* ------------------------------------------------------------------ *)
+
+let no_timestamp_vcd =
+  {|
+$timescale 1ns $end
+$scope module tb $end
+$var wire 1 ! a $end
+$upscope $end
+$enddefinitions $end
+1!
+|}
+
+let%expect_test "changes without any timestamp are yielded" =
+  Seq.iter pp_event (stream (stream_of no_timestamp_vcd));
+  [%expect {|
+    t=0
+      state:
+      changes: !=1 |}]

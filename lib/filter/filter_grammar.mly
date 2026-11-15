@@ -3,7 +3,7 @@
 %}
 
 %token <string> NAME
-%token <string> NAME_GLOB
+%token <string list> NAME_GLOB
 %token STAR GLOBSTAR LBRACE RBRACE COMMA DOT
 %token EOF
 
@@ -19,4 +19,4 @@ segment:
   | STAR                                                       { Wildcard }
   | LBRACE alts = separated_nonempty_list(COMMA, NAME) RBRACE { Alt alts }
   | n = NAME                                                   { Literal n }
-  | p = NAME_GLOB                                              { Name_pattern (String.split_on_char '*' p) }
+  | p = NAME_GLOB                                              { Name_pattern p }

@@ -12,8 +12,11 @@
                  | '{' name (',' name)* '}'      (* one of the listed names *)
                  | name                          (* exact component name    *)
 
-      name     ::= (printable ASCII except  . * { } ,)+
-    v} *)
+      name     ::= (byte except space, controls and  . * { } , \  |  '\' any-byte)+
+    v}
+
+    A backslash makes the next byte literal, so [a\.b] is the single component ["a.b"] and [a\*] contains a star. Bytes
+    above 126 are plain name characters. *)
 
 type segment =
   | Literal of string  (** Exact component match: the component must equal this string. *)
